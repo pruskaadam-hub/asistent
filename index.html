@@ -146,6 +146,10 @@ async function saveFile(key, message) {
 }
 async function loadAll() {
   setSync('Načítám…');
+  const repoCheck = await fetch(`https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}`, { headers: headers(), cache: 'no-store' });
+  if (!repoCheck.ok) throw new Error('Datový repozitář není dostupný. Zkontrolujte název a oprávnění tokenu.');
+  const repoInfo = await repoCheck.json();
+  if (!repoInfo.private) throw new Error('Pro osobní data použijte soukromý repozitář.');
   await Promise.all(Object.keys(FILES).map(loadFile));
   setSync('Načteno ' + new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }));
 }
