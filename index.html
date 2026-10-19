@@ -117,7 +117,7 @@ function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
 const FILES = {
   zdroje: 'zdroje.json', pravidla: 'pravidla.json', ukoly: 'ukoly.json', kontakty: 'kontakty.json',
   faktury: 'faktury.json', koncepty: 'koncepty.json', zapisy: 'zapisy.json', zpetna: 'zpetna-vazba.json',
-  report: 'reporty/dnes.md', plandata: 'planovani.json', vecer: 'reporty/vecer.md', tyden: 'reporty/tyden.md'
+  report: 'reporty/dnes.md', plandata: 'planovani.json', vecer: 'reporty/vecer.md', tyden: 'reporty/tyden.md', anotace: 'anotace.json'
 };
 const store = {}, shas = {};
 
@@ -244,6 +244,7 @@ const SCHEMAS = {
       { k: 'slib_komu', l: 'Komu jsem slíbil výsledek', t: 'text' },
       { k: 'pripomenout', l: 'Připomenout / follow-up', t: 'date' },
       { k: 'plan_datum', l: 'Plánovaný den (nemění termín)', t: 'date' },
+      { k: 'kontext_adama', l: 'Moje upřesnění pro asistenta', t: 'textarea', wide: 1, ph: 'Co se opravdu děje, co je hotové, co potřebuji a na co čekám…' },
       { k: 'poznamka', l: 'Poznámka', t: 'textarea', wide: 1 }
     ],
     meta: x => [x.odhad_min && tag(x.odhad_min + ' min · ' + (x.odhad_typ || 'odhad')), x.projekt && tag(x.projekt), x.oblast && areaTag(x.oblast), x.termin && dueTag(x.termin, x.stav === 'hotovo'), x.priorita === 'vysoká' && tag('vysoká priorita', 'bad'), x.zdroj && `<span class="muted">${esc(x.zdroj)}</span>`],
@@ -498,6 +499,7 @@ async function saveForm(key, formEl) {
   store[key] = store[key] || [];
   if (id === '__new') store[key].push(Object.assign({ id: uid(), vytvoreno: today(), zdroj_zapisu: 'panel' }, data));
   else Object.assign(store[key].find(x => x.id === id), data, { upraveno: today() });
+  if (key==='ukoly') { const item=store[key].find(x=>x.id===id)||store[key][store[key].length-1]; if(data.kontext_adama!==undefined) item.kontext_upraveno=new Date().toISOString(); }
   if (key==='ukoly' && data.stav==='hotovo') { const item=store[key].find(x=>x.id===id) || store[key][store[key].length-1]; if(!item.hotovo) item.hotovo=today(); }
   if (await saveFile(key, `Panel: ${id === '__new' ? 'nový záznam' : 'úprava'} – ${S.title}`)) { ui.editing = null; ui.adding = false; render(); toast('Uloženo'); }
 }
@@ -579,7 +581,7 @@ $('#main').addEventListener('input', e => {
 /* ---------- Plánování času ---------- */
 const planUI={date:today(),duration:30};
 function taskDetails(x) {
-  return (x.dalsi_krok ? '<div class="task-note"><b>Další krok:</b> '+esc(x.dalsi_krok)+'</div>':'')
+  return (x.kontext_adama ? '<div class="card" style="margin-top:10px;background:var(--surface-2)"><b>Moje upřesnění</b><div class="task-note">'+esc(x.kontext_adama)+'</div></div>':'') + (x.dalsi_krok ? '<div class="task-note"><b>Další krok:</b> '+esc(x.dalsi_krok)+'</div>':'')
     +(x.kroky ? '<details class="task-note"><summary>Kroky projektu</summary><p style="white-space:pre-wrap">'+esc(x.kroky)+'</p></details>':'')
     +(x.cekam_na ? '<div class="task-note">Čekám na: '+esc(x.cekam_na)+'</div>':'')
     +(x.slib_komu ? '<div class="task-note">Slíbeno: '+esc(x.slib_komu)+'</div>':'')
@@ -607,7 +609,7 @@ function freeWindows(date,now=Date.now()) {
   const c=planningCfg(),begin=localInstant(date,c.zacatek),end=localInstant(date,c.konec),pad=Math.max(0,Number(c.rezerva_min)||0)*60000;
   let cursor=Math.max(begin, date===today()?Math.ceil(now/300000)*300000:begin);
   if(cursor>=end)return [];
-  const intervals=(store.plandata.busy||[]).map(b=>[(/^\d{4}-\d{2}-\d{2}$/.test(b.start)?localInstant(b.start,'00:00'):Date.parse(b.start))-pad,(/^\d{4}-\d{2}-\d{2}$/.test(b.end)?localInstant(b.end,'00:00'):Date.parse(b.end))+pad]).filter(b=>Number.isFinite(b[0])&&Number.isFinite(b[1])&&b[1]>cursor&&b[0]<end).sort((a,b)=>a[0]-b[0]);
+  const intervals=[...(store.plandata.busy||[]),...manualEvents(date).filter(x=>x.obsazeno!==false).map(x=>({start:x.start,end:x.end}))].map(b=>[(/^\d{4}-\d{2}-\d{2}$/.test(b.start)?localInstant(b.start,'00:00'):Date.parse(b.start))-pad,(/^\d{4}-\d{2}-\d{2}$/.test(b.end)?localInstant(b.end,'00:00'):Date.parse(b.end))+pad]).filter(b=>Number.isFinite(b[0])&&Number.isFinite(b[1])&&b[1]>cursor&&b[0]<end).sort((a,b)=>a[0]-b[0]);
   const result=[];for(const [a,b]of intervals){if(a>cursor)result.push([cursor,Math.min(a,end)]);cursor=Math.max(cursor,b);if(cursor>=end)break;}if(cursor<end)result.push([cursor,end]);return result;
 }
 function minutesOf(x) { return Math.max(5,Math.min(480,Number(x.odhad_min)||30)); }
@@ -631,7 +633,7 @@ const timeLabel = n => new Date(n).toLocaleTimeString('cs-CZ',{timeZone:'Europe/
 function renderPlan() {
   const date=planUI.date,c=planningCfg(),p=makeDayPlan(date),issue=calendarIssue(date),all=store.ukoly||[];
   const waiting=all.filter(x=>x.stav!=='hotovo'&&(x.cekam_na||x.stav==='čeká na jiné'||x.slib_komu||x.pripomenout));
-  const events=(store.plandata?.pripravy||[]).filter(e=>e.start&&new Date(e.start).getTime()>=Date.now()).sort((a,b)=>a.start.localeCompare(b.start));
+  const events=[...(store.plandata?.pripravy||[]).map(p=>{const e=agendaEvents().find(x=>x.id===p.event_id);return e?{...p,nazev:e.title,body:p.body+(e.annotation?.kontext?'\n\nMoje upřesnění: '+e.annotation.kontext:'')}:p;}),...manualEvents().map(x=>({event_id:x.id,nazev:x.title,start:x.start,body:x.description||'Ručně vložená aktivita.'}))].filter(e=>e.start&&new Date(e.start).getTime()>=Date.now()).sort((a,b)=>a.start.localeCompare(b.start));
   const duration=Number(planUI.duration)||30;
   const suggestions=freeWindows(date).flatMap(w=>{let a=[];for(let t=w[0];t+duration*60000<=w[1]&&a.length<3;t+=Math.max(30,duration+Number(c.rezerva_min))*60000)a.push([t,t+duration*60000]);return a;}).slice(0,3);
   const open=all.filter(x=>x.stav!=='hotovo');
@@ -688,11 +690,11 @@ function pragueDate(value) {
 }
 function calendarItems(date) {
  const tasks=(store.ukoly||[]).filter(x=>x.stav!=='hotovo'&&(!calUI.area||x.oblast===calUI.area)).filter(x=>x.termin===date||x.plan_datum===date||x.pripomenout===date).map(x=>({kind:'task',id:x.id,title:x.nazev,oblast:x.oblast,task:x,label:x.termin===date?'Termín':x.pripomenout===date?'Follow-up':'Plán'}));
- const events=(store.plandata?.udalosti||[]).filter(x=>!calUI.area||x.oblast===calUI.area).filter(x=>pragueDate(x.start)<=date&&pragueDate(x.end)>=date&&Date.parse(x.end)>localInstant(date,'00:00')).map(x=>({kind:'event',id:x.id,title:x.title,oblast:x.oblast,event:x,label:/^\d{4}-\d{2}-\d{2}$/.test(x.start)?'Celý den':timeLabel(Date.parse(x.start))}));
+ const events=agendaEvents(date).filter(x=>!calUI.area||x.oblast===calUI.area).filter(x=>pragueDate(x.start)<=date&&pragueDate(x.end)>=date&&Date.parse(x.end)>localInstant(date,'00:00')).map(x=>({kind:'event',id:x.id,title:x.title,oblast:x.oblast,event:x,label:/^\d{4}-\d{2}-\d{2}$/.test(x.start)?'Celý den':timeLabel(Date.parse(x.start))}));
  const busy=(store.plandata?.busy||[]).filter(x=>x.source==='loc-cal'&&(!calUI.area||calUI.area==='LOC')&&Date.parse(x.start)<localInstant(nextDate(date),'00:00')&&Date.parse(x.end)>localInstant(date,'00:00'));
- const dedup=Array.from(new Map(busy.map(x=>[x.start+'|'+x.end,x])).values()).map(x=>({kind:'busy',title:'Lab On Card · obsazeno',oblast:'LOC',label:timeLabel(Date.parse(x.start))+'–'+timeLabel(Date.parse(x.end))}));
+ const dedup=Array.from(new Map(busy.filter(b=>!manualEvents(date).some(e=>Date.parse(e.start)===Date.parse(b.start)&&Date.parse(e.end)===Date.parse(b.end))).map(x=>[x.start+'|'+x.end,x])).values()).map(x=>({kind:'busy',id:busyKey(x),title:annotationFor(busyKey(x))?.nazev||'Lab On Card · obsazeno',oblast:'LOC',busy:x,annotation:annotationFor(busyKey(x)),label:timeLabel(Date.parse(x.start))+'–'+timeLabel(Date.parse(x.end))}));
  const followups=(store.kontakty||[]).filter(x=>x.followup===date&&(!calUI.area||x.oblast===calUI.area)).map(x=>({kind:'contact',id:x.id,title:'Ozvat se: '+x.jmeno,oblast:x.oblast,label:'Follow-up',contact:x}));
- return [...events,...dedup,...tasks,...followups];
+ return [...events,...dedup,...tasks,...followups].sort((a,b)=>{const at=a.event?Date.parse(a.event.start):a.busy?Date.parse(a.busy.start):Infinity,bt=b.event?Date.parse(b.event.start):b.busy?Date.parse(b.busy.start):Infinity;return at-bt||a.title.localeCompare(b.title,'cs');});
 }
 function renderCalendar() {
  const [y,m]=calUI.month.split('-').map(Number),first=new Date(Date.UTC(y,m-1,1,12)),offset=(first.getUTCDay()+6)%7;
@@ -713,9 +715,9 @@ function renderCalendar() {
  +'<div class="calendar-layout"><div><div class="calendar-grid">'+['Po','Út','St','Čt','Pá','So','Ne'].map(x=>'<div class="calendar-weekday">'+x+'</div>').join('')+cells+'</div><p class="muted">Kalendáře načtené '+esc(store.plandata?.od||'—')+' až '+esc(store.plandata?.do||'—')+'. Mimo tento rozsah se zobrazují jen uložené úkoly. Na mobilu barevné značky otevři výběrem dne.</p></div>'
  +'<aside class="calendar-agenda"><h3>'+fmtDate(calUI.date)+'</h3>'+(issue?'<p class="muted">'+esc(issue)+'</p>':'')
  +'<button class="btn pri" data-cal-plan="'+calUI.date+'">Naplánovat tento den →</button>'
- +'<button class="btn" style="margin:8px 0" data-cal-new="'+calUI.date+'">+ Úkol na tento den</button>'
+ +'<div class="calendar-task-actions"><button class="btn" data-cal-new="'+calUI.date+'">+ Úkol</button><button class="btn" data-ann-new="'+calUI.date+'">+ Vlastní událost / LOC</button></div>'+renderAnnotationEditor()
  +(selected.length?selected.map(x=>'<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="agenda-time">'+esc(x.label)+'</div><b>'+esc(x.title)+'</b>'
- +(x.kind==='contact'?'<div class="calendar-task-actions"><button class="btn sm" data-go-contact="'+esc(x.id)+'">Otevřít kontakt</button></div>':x.kind==='task'?'<div class="calendar-task-actions"><button class="btn sm" data-go-task="'+esc(x.id)+'">Otevřít úkol</button><button class="btn sm good" data-plan-done="'+esc(x.id)+'">Hotovo</button></div>':x.kind==='event'?'<p class="task-note">'+esc((store.plandata?.pripravy||[]).find(p=>p.event_id===x.id)?.body||x.event.description||'Bez dalších podkladů.')+'</p>':'')+'</div>').join(''):'<div class="empty" style="margin-top:10px">Pro tento den nejsou uložené položky.</div>')
+ +(x.kind==='contact'?'<div class="calendar-task-actions"><button class="btn sm" data-go-contact="'+esc(x.id)+'">Otevřít kontakt</button></div>':x.kind==='task'?'<div class="calendar-task-actions"><button class="btn sm" data-go-task="'+esc(x.id)+'">Otevřít úkol</button><button class="btn sm good" data-plan-done="'+esc(x.id)+'">Hotovo</button></div>':x.kind==='event'?'<p class="task-note">'+esc((store.plandata?.pripravy||[]).find(p=>p.event_id===x.id)?.body||x.event.description||'Bez dalších podkladů.')+'</p>':'')+annotationControls(x)+'</div>').join(''):'<div class="empty" style="margin-top:10px">Pro tento den nejsou uložené položky.</div>')
  +'</aside></div><h3>Úkoly bez termínu a bez plánovaného dne</h3><p class="muted">Vyber den v kalendáři a přiřaď mu úkol. Skutečný termín zůstane prázdný.</p>'
  +(undated.length?undated.map(x=>'<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="row"><span class="grow">'+esc(x.nazev)+'</span><button class="btn sm" data-go-task="'+esc(x.id)+'">Upravit</button><button class="btn sm" data-cal-assign="'+esc(x.id)+'">Plánovat '+fmtDate(calUI.date)+'</button></div></div>').join(''):'<div class="empty">Žádné nezařazené úkoly.</div>');
 }
@@ -728,6 +730,111 @@ $('#main').addEventListener('click',async e=>{
  if(b.dataset.calPlan){planUI.date=b.dataset.calPlan;tab='plan';render();return;}
  if(b.dataset.calNew){tab='ukoly';ui.filters.ukoly={oblast:calUI.area};ui.editing=null;ui.adding=true;render();const el=document.querySelector('[data-f="plan_datum"]');if(el)el.value=b.dataset.calNew;return;}
  if(b.dataset.calAssign){const x=(store.ukoly||[]).find(x=>x.id===b.dataset.calAssign);if(!x)return;x.plan_datum=calUI.date;x.upraveno=today();if(await saveFile('ukoly','Panel: naplánování úkolu v kalendáři'))render();}
+});
+
+
+/* ---------- Adamovy anotace a vlastní agenda ---------- */
+const annotationUI={editing:null,kind:'',target:null,date:''};
+function annotationFor(key) { return (store.anotace||[]).find(x=>x.source_key===key); }
+function eventKey(e) {return 'event:'+e.calendar_id+':'+e.id;}
+function busyKey(b) {return 'busy:loc-cal:'+b.start+'|'+b.end;}
+function manualEvents(date) {
+ const out=[];
+ for(const x of (store.anotace||[]).filter(x=>x.typ==='vlastni-udalost')){
+  const dates=[];
+  if(x.opakovani){
+   const anchor=pragueDate(x.start),finish=date||store.plandata?.do||nextDate(today()),first=date||store.plandata?.od||today();
+   if(!anchor)continue;
+   for(let d=first,n=0;d<=finish&&n<370;d=nextDate(d),n++){
+    const delta=Math.round((Date.parse(d+'T12:00:00Z')-Date.parse(anchor+'T12:00:00Z'))/86400000);
+    if(delta>=0&&delta%(7*Math.max(1,Number(x.opakovani.interval_tydnu)||1))===0)dates.push(d);
+   }
+  }else dates.push(pragueDate(x.start));
+  for(const d of dates){
+   const repeated=!!x.opakovani;
+   const start=repeated?new Date(localInstant(d,timeLabel(Date.parse(x.start)))).toISOString():x.start;
+   const end=repeated?new Date(localInstant(d,timeLabel(Date.parse(x.end)))).toISOString():x.end;
+   const specific=repeated?annotationFor('occurrence:'+x.id+':'+d):null;
+   out.push({id:x.id,calendar_id:'rucni-agenda',source:'rucni-agenda',title:specific?.nazev||x.nazev,start,end,description:specific?.kontext||x.kontext,oblast:specific?.oblast||x.oblast,obsazeno:x.obsazeno,annotation:specific||x,series_id:repeated?x.id:null,occurrence_date:d});
+  }
+ }
+ return out;
+}
+function agendaEvents(date) {
+ return (store.plandata?.udalosti||[]).map(e=>{
+  const a=annotationFor(eventKey(e));
+  return a?{...e,title:a.nazev||e.title,oblast:a.oblast||e.oblast,annotation:a}:e;
+ }).concat(manualEvents(date));
+}
+function annotationControls(x) {
+ if(x.kind!=='event'&&x.kind!=='busy')return '';
+ const key=x.kind==='busy'?busyKey(x.busy):x.event.series_id?'occurrence:'+x.event.series_id+':'+x.event.occurrence_date:x.event.source==='rucni-agenda'?x.event.id:eventKey(x.event);
+ const a=x.kind==='busy'?annotationFor(key):x.event.annotation;
+ return (a?.kontext?'<div class="task-note"><b>Moje upřesnění:</b><br>'+esc(a.kontext)+'</div>':'')
+ +'<div class="calendar-task-actions"><button class="btn sm" data-ann-edit="'+esc(key)+'">'+(a?'Upravit moje upřesnění':'Doplnit poznámku / upřesnit')+'</button>'+(a?'<button class="btn sm" data-ann-task="'+esc(a.id)+'">Vytvořit navazující úkol</button>':'')+(x.event?.series_id?'<button class="btn sm" data-ann-edit="'+esc(x.event.series_id)+'">Upravit celou řadu</button>':'')+'</div>';
+}
+function renderAnnotationEditor() {
+ if(!annotationUI.kind)return '';
+ const a=(store.anotace||[]).find(x=>x.id===annotationUI.editing)||{},own=annotationUI.kind==='vlastni-udalost',target=annotationUI.target;
+ const title=a.nazev||target?.title||'',area=a.oblast||target?.oblast||calUI.area||'LOC';
+ const date=pragueDate(a.start)||annotationUI.date||calUI.date;
+ const hm=v=>v&&v.includes('T')?timeLabel(Date.parse(v)):'';
+ return '<div class="card" style="margin-top:12px;border:2px solid var(--accent)"><h3>'+(own?'Vlastní událost':'Moje poznámka k události')+'</h3>'
+ +(!own?'<p class="muted">Upravuješ vlastní název, zařazení a kontext v panelu. Čas a původní událost v připojeném kalendáři zůstávají stejné.</p>':'')
+ +'<label for="annTitle">Název / srozumitelný popis</label><input id="annTitle" value="'+esc(title)+'">'
+ +'<label for="annArea">Oblast</label><select id="annArea">'+AREAS.map(v=>'<option value="'+esc(v.key)+'" '+(area===v.key?'selected':'')+'>'+esc(v.label)+'</option>').join('')+'</select>'
+ +(own?'<label for="annDate">Datum</label><input id="annDate" type="date" value="'+esc(date)+'"><label for="annStart">Začátek</label><input id="annStart" type="time" value="'+esc(hm(a.start)||'09:00')+'"><label for="annEndDate">Datum konce</label><input id="annEndDate" type="date" value="'+esc(pragueDate(a.end)||date)+'"><label for="annEnd">Konec</label><input id="annEnd" type="time" value="'+esc(hm(a.end)||'10:00')+'"><label for="annBusy">Započítat do obsazenosti</label><select id="annBusy"><option value="ano" '+(a.obsazeno!==false?'selected':'')+'>Ano</option><option value="ne" '+(a.obsazeno===false?'selected':'')+'>Ne, pouze poznámka</option></select>':'')
+ +(own?'<label for="annRepeat">Opakování</label><select id="annRepeat"><option value="0">Bez opakování</option><option value="1" '+(a.opakovani?.interval_tydnu===1?'selected':'')+'>Každý týden</option><option value="2" '+(a.opakovani?.interval_tydnu===2?'selected':'')+'>Každé dva týdny</option></select><p class="muted">Datum začátku určuje první výskyt a den v týdnu. Úprava platí pro celou řadu.</p>':'')
+ +'<label for="annContext">Co má asistent vědět</label><textarea id="annContext" style="min-height:150px" placeholder="Co se řeší, výsledek, moje role, stav, další kroky a čekání na druhé…">'+esc(a.kontext||'')+'</textarea>'
+ +'<p class="muted">Tvoje upřesnění se uloží soukromě a zůstane zachované i po obnovení kalendářů. Nevkládej přístupové údaje.</p>'
+ +'<div class="calendar-task-actions"><button class="btn pri" data-ann-save>Uložit</button><button class="btn" data-ann-cancel>Zrušit</button>'+(a.id?'<button class="btn bad" data-ann-delete="'+esc(a.id)+'">'+(own?'Smazat vlastní událost':'Smazat moji poznámku')+'</button>':'')+'</div></div>';
+}
+function openAnnotation(key) {
+ const own=(store.anotace||[]).find(x=>x.id===key&&x.typ==='vlastni-udalost');
+ if(own){Object.assign(annotationUI,{editing:own.id,kind:own.typ,target:{title:own.nazev,oblast:own.oblast},date:pragueDate(own.start)});return;}
+ const occurrence=manualEvents(calUI.date).find(x=>x.series_id&&'occurrence:'+x.series_id+':'+x.occurrence_date===key);
+ const event=occurrence||(store.plandata?.udalosti||[]).find(x=>eventKey(x)===key);
+ const b=(store.plandata?.busy||[]).find(x=>x.source==='loc-cal'&&busyKey(x)===key);
+ const a=annotationFor(key);
+ Object.assign(annotationUI,{editing:a?.id||null,kind:'anotace',target:{source_key:key,title:event?.title||'Lab On Card · obsazeno',oblast:event?.oblast||'LOC',event_id:event?.id,calendar_id:event?.calendar_id,start:event?.start||b?.start,end:event?.end||b?.end},date:calUI.date});
+}
+$('#main').addEventListener('click',async e=>{
+ const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.annNew){Object.assign(annotationUI,{editing:null,kind:'vlastni-udalost',target:null,date:b.dataset.annNew});render();return;}
+ if(b.dataset.annEdit){openAnnotation(b.dataset.annEdit);render();return;}
+ if(b.hasAttribute('data-ann-cancel')){annotationUI.kind='';render();return;}
+ if(b.hasAttribute('data-ann-save')){
+  const nazev=$('#annTitle').value.trim(),kontext=$('#annContext').value.trim(),oblast=$('#annArea').value;
+  if(!nazev){toast('Vyplň název.');return;}
+  const a=(store.anotace||[]).find(x=>x.id===annotationUI.editing),own=annotationUI.kind==='vlastni-udalost';
+  let times={};if(own){
+   const date=$('#annDate').value,endDate=$('#annEndDate').value,startHm=$('#annStart').value,endHm=$('#annEnd').value;
+   if(!date||!endDate||!startHm||!endHm){toast('Vyplň datum a čas začátku i konce.');return;}
+   const start=localInstant(date,startHm),end=localInstant(endDate,endHm);
+   if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start){toast('Konec musí být po začátku.');return;}
+   const interval=Number($('#annRepeat').value); if(interval && date!==endDate){toast('Opakovaná událost musí začínat a končit ve stejný den.');return;}
+   times={start:new Date(start).toISOString(),end:new Date(end).toISOString(),obsazeno:$('#annBusy').value==='ano',opakovani:interval?{interval_tydnu:interval}:null};
+  }
+  const value=Object.assign({},a||{id:uid(),vytvoreno:today(),zdroj_zapisu:'panel'},annotationUI.target||{},times,{typ:annotationUI.kind,nazev,oblast,kontext,upraveno:new Date().toISOString(),autor:'Adam'});
+  if(own)value.source_key=value.id;
+  store.anotace=store.anotace||[];if(a)Object.assign(a,value);else store.anotace.push(value);
+  if(await saveFile('anotace','Panel: vlastní událost nebo upřesnění')){annotationUI.kind='';render();toast('Uloženo pro asistenta');}return;
+ }
+ if(b.dataset.annDelete){
+  if(!confirm('Smazat pouze vlastní záznam v panelu? Původní kalendář se nezmění.'))return;
+  store.anotace=(store.anotace||[]).filter(x=>x.id!==b.dataset.annDelete);
+  if(await saveFile('anotace','Panel: odebrání vlastní anotace')){annotationUI.kind='';render();}return;
+ }
+ if(b.dataset.annTask){
+  const a=(store.anotace||[]).find(x=>x.id===b.dataset.annTask);if(!a)return;
+  const id='annotation:'+a.id+':task';
+  store.ukoly=store.ukoly||[];
+  if(!store.ukoly.some(x=>x.id===id)){
+   store.ukoly.push({id,vytvoreno:today(),zdroj_zapisu:'panel',nazev:'Navázat: '+a.nazev,oblast:a.oblast,termin:'',stav:'otevřený',priorita:'střední',kontext_adama:a.kontext||'',zdroj:'Ruční agenda · '+a.id,zdrojove_id:a.id});
+   if(!await saveFile('ukoly','Panel: navazující úkol z anotace'))return;
+  }
+  tab='ukoly';ui.filters.ukoly={};ui.q.ukoly='';ui.adding=false;ui.editing=id;render();
+ }
 });
 
 /* ---------- start ---------- */
