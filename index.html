@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Asistent</title>
+<style>
+:root{
+  --bg:#f6f5f2;--surface:#fff;--surface-2:#efede8;--text:#1d1c1a;--muted:#6b6862;--border:#dedad2;
+  --accent:#2f5bd3;--accent-soft:#e6ecfb;--good:#2e7d4f;--good-soft:#e3f2e8;--warn:#a86a00;--warn-soft:#fbf0dc;--bad:#b3382c;--bad-soft:#f8e3e0;
+  --radius:10px;--shadow:0 1px 2px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#161614;--surface:#1f1e1c;--surface-2:#2a2926;--text:#ecebe7;--muted:#a19e97;--border:#38362f;
+  --accent:#7d9cf0;--accent-soft:#25304d;--good:#6cc08f;--good-soft:#1f3328;--warn:#e3ae4f;--warn-soft:#3a2f1a;--bad:#ec8a7f;--bad-soft:#3d2320;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--border)}
+.bar{max-width:980px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px}
+.bar h1{font-size:17px;margin:0;font-weight:650}
+.sync{margin-left:auto;font-size:13px;color:var(--muted)}
+nav{max-width:980px;margin:0 auto;padding:0 12px;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav button{border:0;background:none;padding:9px 10px;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;white-space:nowrap}
+nav button.on{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
+nav .count{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;line-height:18px;text-align:center}
+main{max-width:980px;margin:0 auto;padding:16px}
+h2{font-size:18px;margin:4px 0 12px}
+h3{font-size:15px;margin:18px 0 8px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grow{flex:1 1 auto;min-width:0}
+.muted{color:var(--muted);font-size:13px}
+.title{font-weight:600}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--surface-2);font-size:12px;color:var(--muted)}
+.tag.good{background:var(--good-soft);color:var(--good)}.tag.warn{background:var(--warn-soft);color:var(--warn)}.tag.bad{background:var(--bad-soft);color:var(--bad)}.tag.acc{background:var(--accent-soft);color:var(--accent)}
+.btn{border:1px solid var(--border);background:var(--surface);border-radius:8px;padding:6px 12px;cursor:pointer}
+.btn:hover{background:var(--surface-2)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.good{background:var(--good);border-color:var(--good);color:#fff}
+.btn.bad{color:var(--bad)}
+.btn.sm{padding:3px 9px;font-size:13px}
+input,select,textarea{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 9px}
+textarea{min-height:80px;resize:vertical}
+select.inline{width:auto;padding:3px 6px;font-size:13px}
+label{display:block;font-size:13px;color:var(--muted);margin:8px 0 3px}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0 12px}
+.form .wide{grid-column:1/-1}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.toolbar input,.toolbar select{width:auto;flex:1 1 160px}
+.empty{padding:24px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:var(--radius)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:6px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;cursor:pointer}
+.stat b{display:block;font-size:22px}
+.md h3,.md h4{margin:12px 0 4px}.md ul{margin:4px 0;padding-left:20px}.md p{margin:6px 0}
+.login{max-width:440px;margin:40px auto}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:14px;z-index:20;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+.done .title{text-decoration:line-through;color:var(--muted)}
+pre.draft{white-space:pre-wrap;font:inherit;margin:6px 0;background:var(--surface-2);padding:8px 10px;border-radius:8px}
+@media (max-width:600px){main{padding:12px}.bar{padding:10px 12px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar"><h1>Asistent</h1><span class="sync" id="sync"></span><button class="btn sm" id="btnSettings" title="Nastavení připojení">Nastavení</button></div>
+  <nav id="nav"></nav>
+</header>
+<main id="main"></main>
+<div class="toast" id="toast"></div>
+<script>
+'use strict';
+/* ---------- konfigurace ---------- */
+const CFG_KEY = 'asistent.cfg.v1';
+const DEFAULT_CFG = { owner: 'pruskaadam-hub', repo: 'asistent-data', branch: 'main', token: '' };
+let cfg = Object.assign({}, DEFAULT_CFG);
+try { Object.assign(cfg, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } catch (e) {}
+function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (e) {} }
+
+const FILES = {
+  zdroje: 'zdroje.json', pravidla: 'pravidla.json', ukoly: 'ukoly.json', kontakty: 'kontakty.json',
+  faktury: 'faktury.json', koncepty: 'koncepty.json', zapisy: 'zapisy.json', zpetna: 'zpetna-vazba.json',
+  report: 'reporty/dnes.md'
+};
+const store = {}, shas = {};
+
+/* ---------- pomocné ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const fmtDate = s => { if (!s) return ''; const [y, m, d] = String(s).slice(0, 10).split('-'); return d ? `${+d}. ${+m}. ${y}` : s; };
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2400); }
+function setSync(msg) { $('#sync').textContent = msg; }
+function b64decode(s) { const bin = atob(s.replace(/\n/g, '')); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); return new TextDecoder().decode(bytes); }
+function b64encode(str) { const bytes = new TextEncoder().encode(str); let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(bin); }
+function mdToHtml(md) {
+  const lines = String(md || '').split('\n'); let html = '', inList = false;
+  const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>');
+  for (const raw of lines) {
+    const l = raw.trimEnd();
+    if (/^\s*[-*] /.test(l)) { if (!inList) { html += '<ul>'; inList = true; } html += '<li>' + inline(l.replace(/^\s*[-*] /, '')) + '</li>'; continue; }
+    if (inList) { html += '</ul>'; inList = false; }
+    if (/^### /.test(l)) html += '<h4>' + inline(l.slice(4)) + '</h4>';
+    else if (/^##? /.test(l)) html += '<h3>' + inline(l.replace(/^##? /, '')) + '</h3>';
+    else if (l.trim()) html += '<p>' + inline(l) + '</p>';
+  }
+  if (inList) html += '</ul>';
+  return html;
+}
+
+/* ---------- GitHub API ---------- */
+function apiUrl(path, withRef) {
+  const p = path.split('/').map(encodeURIComponent).join('/');
+  return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${p}` + (withRef ? `?ref=${encodeURIComponent(cfg.branch)}` : '');
+}
+function headers() { return { 'Authorization': 'Bearer ' + cfg.token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }; }
+async function loadFile(key) {
+  const r = await fetch(apiUrl(FILES[key], true), { headers: headers(), cache: 'no-store' });
+  if (r.status === 404) { store[key] = defaultFor(key); shas[key] = undefined; return; }
+  if (r.status === 401) throw new Error('Token je neplatný nebo vypršel.');
+  if (!r.ok) throw new Error(`GitHub vrátil chybu ${r.status} u ${FILES[key]}.`);
+  const j = await r.json(); shas[key] = j.sha;
+  const text = b64decode(j.content || '');
+  if (key === 'report') store[key] = text;
+  else { try { store[key] = JSON.parse(text || 'null') ?? defaultFor(key); } catch (e) { throw new Error(`Soubor ${FILES[key]} není platný JSON.`); } }
+}
+function defaultFor(key) { return key === 'report' ? '' : key === 'pravidla' ? { profil: '', oblasti: [], autonomie: [], rutiny: [], obecna_pravidla: '' } : []; }
+async function saveFile(key, message) {
+  setSync('Ukládám…');
+  const content = key === 'report' ? store[key] : JSON.stringify(store[key], null, 2) + '\n';
+  const body = { message: message || `Panel: úprava ${FILES[key]}`, content: b64encode(content), branch: cfg.branch };
+  if (shas[key]) body.sha = shas[key];
+  const r = await fetch(apiUrl(FILES[key], false), { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, headers()), body: JSON.stringify(body) });
+  if (r.status === 409 || r.status === 422) {
+    setSync('Konflikt');
+    toast('Soubor mezitím změnil asistent. Načítám aktuální verzi, proveďte úpravu znovu.');
+    await loadFile(key); render(); return false;
+  }
+  if (!r.ok) { setSync('Chyba ukládání'); toast(`Uložení selhalo (${r.status}).`); return false; }
+  const j = await r.json(); shas[key] = j.content && j.content.sha;
+  setSync('Uloženo ' + new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }));
+  return true;
+}
+async function loadAll() {
+  setSync('Načítám…');
+  await Promise.all(Object.keys(FILES).map(loadFile));
+  setSync('Načteno ' + new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }));
+}
+
+/* ---------- schémata kolekcí ---------- */
+const oblastOpts = () => ((store.pravidla && store.pravidla.oblasti) || []).map(o => o.kod).filter(Boolean);
+const SCHEMAS = {
+  ukoly: {
+    title: 'Úkoly', addLabel: 'Nový úkol', searchKeys: ['nazev', 'poznamka', 'zdroj'],
+    fields: [
+      { k: 'nazev', l: 'Úkol', t: 'text', req: 1, wide: 1 },
+      { k: 'oblast', l: 'Oblast', t: 'oblast', filter: 1 },
+      { k: 'termin', l: 'Termín', t: 'date' },
+      { k: 'priorita', l: 'Priorita', t: 'select', o: ['vysoká', 'střední', 'nízká'], def: 'střední' },
+      { k: 'stav', l: 'Stav', t: 'select', o: ['otevřený', 'rozpracovaný', 'čeká na jiné', 'hotovo'], def: 'otevřený', quick: 1, filter: 1 },
+      { k: 'zdroj', l: 'Zdroj', t: 'text', ph: 'e-mail, Plaud, WhatsApp…' },
+      { k: 'poznamka', l: 'Poznámka', t: 'textarea', wide: 1 }
+    ],
+    meta: x => [x.oblast && tag(x.oblast, 'acc'), x.termin && dueTag(x.termin, x.stav === 'hotovo'), x.priorita === 'vysoká' && tag('vysoká priorita', 'bad'), x.zdroj && `<span class="muted">${esc(x.zdroj)}</span>`],
+    sort: (a, b) => (a.stav === 'hotovo') - (b.stav === 'hotovo') || String(a.termin || '9999').localeCompare(String(b.termin || '9999')),
+    doneIf: x => x.stav === 'hotovo'
+  },
+  kontakty: {
+    title: 'Kontakty', addLabel: 'Nový kontakt', searchKeys: ['jmeno', 'organizace', 'email', 'vztah', 'sliby'],
+    fields: [
+      { k: 'jmeno', l: 'Jméno', t: 'text', req: 1 },
+      { k: 'organizace', l: 'Organizace', t: 'text' },
+      { k: 'oblast', l: 'Oblast', t: 'oblast', filter: 1 },
+      { k: 'email', l: 'E-mail', t: 'text' },
+      { k: 'telefon', l: 'Telefon', t: 'text' },
+      { k: 'vztah', l: 'Vztah / role', t: 'text' },
+      { k: 'posledni_kontakt', l: 'Poslední kontakt', t: 'date' },
+      { k: 'followup', l: 'Ozvat se do', t: 'date' },
+      { k: 'sliby', l: 'Otevřené sliby a body', t: 'textarea', wide: 1 }
+    ],
+    titleOf: x => x.jmeno + (x.organizace ? ` · ${x.organizace}` : ''),
+    meta: x => [x.oblast && tag(x.oblast, 'acc'), x.followup && dueTag(x.followup, false, 'follow-up'), x.posledni_kontakt && `<span class="muted">naposledy ${fmtDate(x.posledni_kontakt)}</span>`, x.email && `<span class="muted">${esc(x.email)}</span>`],
+    sort: (a, b) => String(a.followup || '9999').localeCompare(String(b.followup || '9999')) || String(a.jmeno).localeCompare(String(b.jmeno), 'cs')
+  },
+  faktury: {
+    title: 'Faktury', addLabel: 'Nová faktura', searchKeys: ['cislo', 'protistrana', 'poznamka'],
+    fields: [
+      { k: 'cislo', l: 'Číslo', t: 'text' },
+      { k: 'smer', l: 'Typ', t: 'select', o: ['vystavená', 'přijatá'], def: 'vystavená', filter: 1 },
+      { k: 'protistrana', l: 'Protistrana', t: 'text', req: 1 },
+      { k: 'oblast', l: 'Oblast', t: 'oblast', filter: 1 },
+      { k: 'castka', l: 'Částka', t: 'number' },
+      { k: 'mena', l: 'Měna', t: 'select', o: ['CZK', 'EUR', 'CHF', 'USD'], def: 'CZK' },
+      { k: 'vystaveno', l: 'Vystaveno', t: 'date' },
+      { k: 'splatnost', l: 'Splatnost', t: 'date' },
+      { k: 'stav', l: 'Stav', t: 'select', o: ['nezaplaceno', 'zaplaceno', 'storno'], def: 'nezaplaceno', quick: 1, filter: 1 },
+      { k: 'poznamka', l: 'Poznámka', t: 'textarea', wide: 1 }
+    ],
+    titleOf: x => `${x.smer === 'přijatá' ? 'Přijatá' : 'Vystavená'}${x.cislo ? ' ' + x.cislo : ''} · ${x.protistrana || ''}`,
+    meta: x => [x.castka && `<b>${Number(x.castka).toLocaleString('cs-CZ')} ${esc(x.mena || '')}</b>`, x.oblast && tag(x.oblast, 'acc'), x.splatnost && dueTag(x.splatnost, x.stav !== 'nezaplaceno', 'splatnost')],
+    sort: (a, b) => (a.stav !== 'nezaplaceno') - (b.stav !== 'nezaplaceno') || String(a.splatnost || '9999').localeCompare(String(b.splatnost || '9999')),
+    doneIf: x => x.stav !== 'nezaplaceno'
+  },
+  zapisy: {
+    title: 'Zápisy', addLabel: 'Nový zápis', searchKeys: ['nazev', 'text', 'ukoly'],
+    fields: [
+      { k: 'datum', l: 'Datum', t: 'date', def: today },
+      { k: 'nazev', l: 'Název', t: 'text', req: 1 },
+      { k: 'oblast', l: 'Oblast', t: 'oblast', filter: 1 },
+      { k: 'zdroj', l: 'Zdroj', t: 'select', o: ['Plaud', 'WhatsApp', 'ručně', 'e-mail'], def: 'ručně', filter: 1 },
+      { k: 'text', l: 'Zápis', t: 'textarea', wide: 1 },
+      { k: 'ukoly', l: 'Vytažené úkoly', t: 'textarea', wide: 1 }
+    ],
+    meta: x => [x.datum && `<span class="muted">${fmtDate(x.datum)}</span>`, x.oblast && tag(x.oblast, 'acc'), x.zdroj && tag(x.zdroj)],
+    body: x => x.text ? `<div class="muted" style="margin-top:6px;white-space:pre-wrap">${esc(String(x.text).slice(0, 280))}${String(x.text).length > 280 ? '…' : ''}</div>` : '',
+    sort: (a, b) => String(b.datum || '').localeCompare(String(a.datum || ''))
+  },
+  zdroje: {
+    title: 'Zdroje', addLabel: 'Nový zdroj', searchKeys: ['nazev', 'typ', 'poznamka'],
+    intro: 'Rutiny asistenta čtou jen zdroje ve stavu Aktivní. Vypnutím zdroje se historie nemaže.',
+    fields: [
+      { k: 'nazev', l: 'Zdroj', t: 'text', req: 1, wide: 1 },
+      { k: 'oblast', l: 'Oblast', t: 'oblast', filter: 1 },
+      { k: 'typ', l: 'Typ propojení', t: 'select', o: ['konektor', 'přeposílání e-mailu', 'odběr ICS', 'sdílený kalendář', 'Zkratky + složka', 'n8n / API', 'ručně'] },
+      { k: 'adresa', l: 'Adresa / alias', t: 'text' },
+      { k: 'rezim', l: 'Režim', t: 'select', o: ['čtení', 'čtení + zápis', 'obousměrně'], def: 'čtení' },
+      { k: 'stav', l: 'Stav', t: 'select', o: ['Aktivní', 'Vypnuto', 'Čeká na schválení', 'Plánováno'], def: 'Plánováno', quick: 1, filter: 1 },
+      { k: 'poznamka', l: 'Poznámka', t: 'textarea', wide: 1 }
+    ],
+    meta: x => [x.oblast && tag(x.oblast, 'acc'), x.typ && tag(x.typ), x.rezim && `<span class="muted">${esc(x.rezim)}</span>`, x.adresa && `<span class="muted">${esc(x.adresa)}</span>`],
+    body: x => x.poznamka ? `<div class="muted" style="margin-top:4px">${esc(x.poznamka)}</div>` : '',
+    sort: (a, b) => ['Aktivní', 'Čeká na schválení', 'Plánováno', 'Vypnuto'].indexOf(a.stav) - ['Aktivní', 'Čeká na schválení', 'Plánováno', 'Vypnuto'].indexOf(b.stav)
+  },
+  zpetna: {
+    title: 'Zpětná vazba', addLabel: 'Nová poznámka', searchKeys: ['vystup', 'poznamka'],
+    intro: 'Co asistent udělal dobře nebo špatně. Jednou týdně z toho navrhne úpravu pravidel v záložce Učení.',
+    fields: [
+      { k: 'datum', l: 'Datum', t: 'date', def: today },
+      { k: 'vystup', l: 'Výstup', t: 'select', o: ['ranní report', 'koncept e-mailu', 'úkol', 'zápis', 'připomínka', 'týdenní přehled', 'jiné'], def: 'jiné', filter: 1 },
+      { k: 'hodnoceni', l: 'Hodnocení', t: 'select', o: ['dobré', 'špatné'], def: 'špatné', filter: 1 },
+      { k: 'zapracovano', l: 'Zapracováno', t: 'select', o: ['ne', 'ano'], def: 'ne', quick: 1 },
+      { k: 'poznamka', l: 'Co příště jinak', t: 'textarea', req: 1, wide: 1 }
+    ],
+    titleOf: x => x.poznamka,
+    meta: x => [x.datum && `<span class="muted">${fmtDate(x.datum)}</span>`, tag(x.vystup || ''), tag(x.hodnoceni || '', x.hodnoceni === 'dobré' ? 'good' : 'bad')],
+    sort: (a, b) => String(b.datum || '').localeCompare(String(a.datum || ''))
+  }
+};
+function tag(t, cls) { return `<span class="tag ${cls || ''}">${esc(t)}</span>`; }
+function dueTag(d, done, label) {
+  const t = today(); const txt = (label ? label + ' ' : '') + fmtDate(d);
+  if (done) return tag(txt);
+  return d < t ? tag('po termínu · ' + txt, 'bad') : d === t ? tag('dnes', 'warn') : tag(txt);
+}
+function stavClass(v) { return ({ 'Aktivní': 'good', 'Vypnuto': '', 'Čeká na schválení': 'warn', 'Plánováno': 'acc', 'hotovo': 'good', 'zaplaceno': 'good', 'nezaplaceno': 'warn' })[v] || ''; }
+
+/* ---------- navigace ---------- */
+const TABS = [
+  ['dnes', 'Dnes'], ['schvaleni', 'Ke schválení'], ['ukoly', 'Úkoly'], ['kontakty', 'Kontakty'], ['faktury', 'Faktury'],
+  ['zapisy', 'Zápisy'], ['zdroje', 'Zdroje'], ['uceni', 'Učení'], ['zpetna', 'Zpětná vazba']
+];
+let tab = 'dnes';
+try { tab = localStorage.getItem('asistent.tab') || 'dnes'; } catch (e) {}
+const ui = { filters: {}, q: {}, editing: null, adding: false, conceptView: 'ceka' };
+function renderNav() {
+  const pending = (store.koncepty || []).filter(c => c.stav === 'navrh').length;
+  $('#nav').innerHTML = TABS.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${l}${k === 'schvaleni' && pending ? `<span class="count">${pending}</span>` : ''}</button>`).join('');
+}
+$('#nav').addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]'); if (!b) return;
+  tab = b.dataset.tab; ui.editing = null; ui.adding = false;
+  try { localStorage.setItem('asistent.tab', tab); } catch (err) {}
+  render(); window.scrollTo(0, 0);
+});
+$('#btnSettings').addEventListener('click', () => { tab = '__settings'; render(); });
+
+function render() {
+  if (!cfg.token || tab === '__settings') { $('#nav').innerHTML = ''; return renderLogin(); }
+  renderNav();
+  const m = $('#main');
+  if (tab === 'dnes') m.innerHTML = renderDnes();
+  else if (tab === 'schvaleni') m.innerHTML = renderSchvaleni();
+  else if (tab === 'uceni') m.innerHTML = renderUceni();
+  else if (SCHEMAS[tab]) m.innerHTML = renderCollection(tab);
+}
+
+/* ---------- přihlášení / nastavení ---------- */
+function renderLogin() {
+  $('#main').innerHTML = `<div class="login card">
+    <h2>Připojení k datům</h2>
+    <p class="muted">Panel čte a ukládá data do vašeho soukromého repozitáře na GitHubu. Token se uloží jen v tomto prohlížeči.</p>
+    <label>Vlastník (uživatel GitHubu)</label><input id="cOwner" value="${esc(cfg.owner)}">
+    <label>Repozitář s daty</label><input id="cRepo" value="${esc(cfg.repo)}">
+    <label>Větev</label><input id="cBranch" value="${esc(cfg.branch)}">
+    <label>Fine-grained token (Contents: Read and write)</label><input id="cToken" type="password" value="${esc(cfg.token)}" placeholder="github_pat_…" autocomplete="off">
+    <div class="row" style="margin-top:14px"><button class="btn pri" id="cSave">Připojit</button>${cfg.token ? '<button class="btn" id="cCancel">Zpět</button><button class="btn bad" id="cLogout">Odhlásit</button>' : ''}</div>
+    <p class="muted" id="cErr" style="color:var(--bad)"></p>
+  </div>`;
+  $('#cSave').onclick = async () => {
+    cfg.owner = $('#cOwner').value.trim(); cfg.repo = $('#cRepo').value.trim(); cfg.branch = $('#cBranch').value.trim() || 'main'; cfg.token = $('#cToken').value.trim();
+    try { await loadAll(); saveCfg(); tab = 'dnes'; render(); } catch (e) { $('#cErr').textContent = e.message; setSync(''); }
+  };
+  if ($('#cCancel')) $('#cCancel').onclick = () => { tab = 'dnes'; render(); };
+  if ($('#cLogout')) $('#cLogout').onclick = () => { cfg.token = ''; saveCfg(); for (const k in store) delete store[k]; setSync(''); render(); };
+}
+
+/* ---------- Dnes ---------- */
+function renderDnes() {
+  const t = today();
+  const ukoly = (store.ukoly || []).filter(x => x.stav !== 'hotovo');
+  const late = ukoly.filter(x => x.termin && x.termin < t), now = ukoly.filter(x => x.termin === t);
+  const koncepty = (store.koncepty || []).filter(c => c.stav === 'navrh');
+  const fu = (store.kontakty || []).filter(x => x.followup && x.followup <= t);
+  const fakt = (store.faktury || []).filter(x => x.stav === 'nezaplaceno' && x.splatnost && x.splatnost <= t);
+  const zdrojeProblem = (store.zdroje || []).filter(x => x.stav === 'Aktivní' && /chyba|nefunguje/i.test(x.poznamka || ''));
+  const list = (arr, fn) => arr.length ? arr.map(fn).join('') : '';
+  const taskCard = x => `<div class="card"><div class="row"><span class="grow title">${esc(x.nazev)}</span>${x.oblast ? tag(x.oblast, 'acc') : ''}${dueTag(x.termin)}<button class="btn sm" data-act="done" data-id="${esc(x.id)}">Hotovo</button></div></div>`;
+  return `<h2>${new Date().toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
+  <div class="stats">
+    <div class="stat" data-go="ukoly"><span class="muted">Po termínu</span><b style="color:${late.length ? 'var(--bad)' : 'inherit'}">${late.length}</b></div>
+    <div class="stat" data-go="ukoly"><span class="muted">Na dnes</span><b>${now.length}</b></div>
+    <div class="stat" data-go="schvaleni"><span class="muted">Ke schválení</span><b>${koncepty.length}</b></div>
+    <div class="stat" data-go="kontakty"><span class="muted">Follow-upy</span><b>${fu.length}</b></div>
+    <div class="stat" data-go="faktury"><span class="muted">Faktury k řešení</span><b>${fakt.length}</b></div>
+  </div>
+  ${zdrojeProblem.length ? `<div class="card" style="border-color:var(--warn)"><b>Pozor na zdroje:</b> ${zdrojeProblem.map(z => esc(z.nazev)).join(', ')}</div>` : ''}
+  <h3>Ranní report</h3>
+  <div class="card md">${store.report ? mdToHtml(store.report) : '<span class="muted">Asistent zatím report nevytvořil. Objeví se tu po prvním ranním běhu.</span>'}</div>
+  ${late.length ? '<h3>Po termínu</h3>' + list(late, taskCard) : ''}
+  ${now.length ? '<h3>Na dnes</h3>' + list(now, taskCard) : ''}
+  ${fu.length ? '<h3>Ozvat se</h3>' + list(fu, x => `<div class="card"><div class="row"><span class="grow title">${esc(x.jmeno)}${x.organizace ? ' · ' + esc(x.organizace) : ''}</span>${dueTag(x.followup)}</div>${x.sliby ? `<div class="muted">${esc(x.sliby)}</div>` : ''}</div>`) : ''}
+  ${fakt.length ? '<h3>Faktury po splatnosti</h3>' + list(fakt, x => `<div class="card"><div class="row"><span class="grow title">${esc(x.protistrana)}${x.cislo ? ' · ' + esc(x.cislo) : ''}</span><b>${Number(x.castka || 0).toLocaleString('cs-CZ')} ${esc(x.mena || '')}</b>${dueTag(x.splatnost)}</div></div>`) : ''}`;
+}
+
+/* ---------- Ke schválení ---------- */
+function renderSchvaleni() {
+  const all = store.koncepty || [];
+  const view = ui.conceptView;
+  const items = all.filter(c => view === 'ceka' ? c.stav === 'navrh' : c.stav !== 'navrh').sort((a, b) => String(b.vytvoreno || '').localeCompare(String(a.vytvoreno || '')));
+  const lbl = { navrh: ['čeká', 'warn'], schvaleno: ['schváleno', 'good'], odeslano: ['odesláno', 'good'], zamitnuto: ['zamítnuto', 'bad'] };
+  return `<h2>Ke schválení</h2>
+  <p class="muted">Koncepty e-mailů od asistenta. Upravený text se uloží jako příklad vašeho stylu. Odesíláte vždy sami z původní schránky.</p>
+  <div class="toolbar"><button class="btn ${view === 'ceka' ? 'pri' : ''}" data-cview="ceka">Čeká (${all.filter(c => c.stav === 'navrh').length})</button><button class="btn ${view === 'hotovo' ? 'pri' : ''}" data-cview="hotovo">Vyřízené</button></div>
+  ${items.length ? items.map(c => `<div class="card" data-cid="${esc(c.id)}">
+    <div class="row"><span class="grow title">${esc(c.predmet || '(bez předmětu)')}</span>${c.oblast ? tag(c.oblast, 'acc') : ''}${tag(...(lbl[c.stav] || [c.stav]))}</div>
+    <div class="muted">Komu: ${esc(c.komu || '')}${c.odeslat_z ? ' · odeslat z: ' + esc(c.odeslat_z) : ''}${c.vytvoreno ? ' · ' + fmtDate(c.vytvoreno) : ''}</div>
+    ${c.kontext ? `<div class="muted" style="margin-top:4px">Kontext: ${esc(c.kontext)}</div>` : ''}
+    ${c.stav === 'navrh' ? `<textarea data-ctext style="min-height:160px;margin-top:8px">${esc(c.text)}</textarea>
+      <div class="row" style="margin-top:8px"><button class="btn good" data-cact="schvalit">Schválit a zkopírovat</button><button class="btn" data-cact="kopirovat">Kopírovat</button><button class="btn" data-cact="ulozit">Uložit úpravu</button><button class="btn bad" data-cact="zamitnout">Zamítnout</button></div>`
+      : `<pre class="draft">${esc(c.text)}</pre>${c.stav === 'schvaleno' ? '<div class="row"><button class="btn sm" data-cact="kopirovat">Kopírovat</button><button class="btn sm" data-cact="odeslano">Označit jako odesláno</button></div>' : ''}`}
+  </div>`).join('') : `<div class="empty">${view === 'ceka' ? 'Žádné koncepty nečekají na schválení.' : 'Zatím nic vyřízeného.'}</div>`}`;
+}
+async function conceptAction(id, act, card) {
+  const c = (store.koncepty || []).find(x => x.id === id); if (!c) return;
+  const ta = card.querySelector('[data-ctext]');
+  if (ta && ta.value !== c.text) { if (c.puvodni_text == null) c.puvodni_text = c.text; c.text = ta.value; c.upraveno = true; }
+  if (act === 'kopirovat' || act === 'schvalit') { try { await navigator.clipboard.writeText((c.predmet ? 'Předmět: ' + c.predmet + '\n\n' : '') + c.text); toast('Zkopírováno do schránky'); } catch (e) { toast('Kopírování se nepodařilo, označte text ručně.'); } }
+  if (act === 'kopirovat') { if (ta) await saveFile('koncepty', 'Panel: úprava konceptu'); return; }
+  if (act === 'schvalit') { c.stav = 'schvaleno'; c.vyrizeno = today(); }
+  if (act === 'zamitnout') { c.stav = 'zamitnuto'; c.vyrizeno = today(); }
+  if (act === 'odeslano') { c.stav = 'odeslano'; c.odeslano = today(); }
+  const ok = await saveFile('koncepty', `Panel: koncept ${act}`);
+  if (ok) { if (act !== 'ulozit') toast({ schvalit: 'Schváleno', zamitnout: 'Zamítnuto', odeslano: 'Označeno jako odesláno' }[act] || 'Uloženo'); render(); }
+}
+
+/* ---------- obecná kolekce ---------- */
+function renderCollection(key) {
+  const S = SCHEMAS[key]; const items = (store[key] || []).slice();
+  const f = ui.filters[key] || {}; const q = (ui.q[key] || '').toLowerCase();
+  let shown = items.filter(x => Object.entries(f).every(([k, v]) => !v || x[k] === v));
+  if (q) shown = shown.filter(x => S.searchKeys.some(k => String(x[k] || '').toLowerCase().includes(q)));
+  if (S.sort) shown.sort(S.sort);
+  const filterFields = S.fields.filter(fd => fd.filter);
+  const toolbar = `<div class="toolbar"><input placeholder="Hledat…" data-q value="${esc(ui.q[key] || '')}">
+    ${filterFields.map(fd => { const opts = fd.t === 'oblast' ? oblastOpts() : fd.o; return `<select data-filter="${fd.k}"><option value="">${esc(fd.l)}: vše</option>${opts.map(o => `<option ${f[fd.k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`; }).join('')}
+    <button class="btn pri" data-act="add">+ ${esc(S.addLabel)}</button></div>`;
+  const card = x => {
+    if (ui.editing === x.id) return formHtml(key, x);
+    const meta = (S.meta ? S.meta(x) : []).filter(Boolean).join(' ');
+    const quick = S.fields.filter(fd => fd.quick).map(fd => `<select class="inline" data-quick="${fd.k}" data-id="${esc(x.id)}" title="${esc(fd.l)}">${fd.o.map(o => `<option ${x[fd.k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).join('');
+    const title = S.titleOf ? S.titleOf(x) : x[S.fields[0].k];
+    return `<div class="card ${S.doneIf && S.doneIf(x) ? 'done' : ''}"><div class="row"><span class="grow title">${esc(title)}</span>${quick}<button class="btn sm" data-act="edit" data-id="${esc(x.id)}">Upravit</button></div>
+      ${meta ? `<div class="row" style="margin-top:4px">${meta}</div>` : ''}${S.body ? S.body(x) : ''}</div>`;
+  };
+  return `<h2>${esc(S.title)} <span class="muted">(${items.length})</span></h2>${S.intro ? `<p class="muted">${esc(S.intro)}</p>` : ''}${toolbar}
+    ${ui.adding ? formHtml(key, null) : ''}
+    ${shown.length ? shown.map(card).join('') : `<div class="empty">${items.length ? 'Nic neodpovídá filtru.' : 'Zatím prázdné.'}</div>`}`;
+}
+function formHtml(key, x) {
+  const S = SCHEMAS[key]; const v = x || {};
+  const input = fd => {
+    const val = v[fd.k] != null ? v[fd.k] : (x ? '' : (typeof fd.def === 'function' ? fd.def() : (fd.def || '')));
+    const name = `data-f="${fd.k}"`;
+    if (fd.t === 'textarea') return `<textarea ${name}>${esc(val)}</textarea>`;
+    if (fd.t === 'select' || fd.t === 'oblast') { const opts = fd.t === 'oblast' ? [''].concat(oblastOpts()) : fd.o; return `<select ${name}>${opts.map(o => `<option value="${esc(o)}" ${val === o ? 'selected' : ''}>${esc(o || '—')}</option>`).join('')}</select>`; }
+    return `<input ${name} type="${fd.t === 'date' ? 'date' : fd.t === 'number' ? 'number' : 'text'}" ${fd.t === 'number' ? 'step="any"' : ''} value="${esc(val)}" placeholder="${esc(fd.ph || '')}">`;
+  };
+  return `<div class="card" data-form="${x ? esc(x.id) : '__new'}" style="border-color:var(--accent)"><div class="form">
+    ${S.fields.map(fd => `<div class="${fd.wide ? 'wide' : ''}"><label>${esc(fd.l)}${fd.req ? ' *' : ''}</label>${input(fd)}</div>`).join('')}
+    </div><div class="row" style="margin-top:12px"><button class="btn pri" data-act="save">Uložit</button><button class="btn" data-act="cancel">Zrušit</button>${x ? '<span class="grow"></span><button class="btn bad" data-act="delete">Smazat</button>' : ''}</div></div>`;
+}
+async function saveForm(key, formEl) {
+  const S = SCHEMAS[key]; const id = formEl.dataset.form; const data = {};
+  formEl.querySelectorAll('[data-f]').forEach(el => { const fd = S.fields.find(f => f.k === el.dataset.f); data[el.dataset.f] = fd && fd.t === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value.trim(); });
+  const missing = S.fields.filter(fd => fd.req && !data[fd.k]);
+  if (missing.length) { toast('Vyplňte: ' + missing.map(m => m.l).join(', ')); return; }
+  store[key] = store[key] || [];
+  if (id === '__new') store[key].push(Object.assign({ id: uid(), vytvoreno: today(), zdroj_zapisu: 'panel' }, data));
+  else Object.assign(store[key].find(x => x.id === id), data, { upraveno: today() });
+  if (await saveFile(key, `Panel: ${id === '__new' ? 'nový záznam' : 'úprava'} – ${S.title}`)) { ui.editing = null; ui.adding = false; render(); toast('Uloženo'); }
+}
+
+/* ---------- Učení ---------- */
+function renderUceni() {
+  const p = store.pravidla || defaultFor('pravidla');
+  const obl = (p.oblasti || []).map((o, i) => `<div class="card" data-obl="${i}"><div class="form">
+      <div><label>Kód</label><input data-o="kod" value="${esc(o.kod)}"></div>
+      <div><label>Název</label><input data-o="nazev" value="${esc(o.nazev)}"></div>
+      <div class="wide"><label>Čím se zabývám</label><textarea data-o="popis">${esc(o.popis)}</textarea></div>
+      <div class="wide"><label>Tón a jazyk e-mailů</label><textarea data-o="ton">${esc(o.ton)}</textarea></div>
+      <div class="wide"><label>Podpis</label><textarea data-o="podpis" style="min-height:60px">${esc(o.podpis)}</textarea></div>
+    </div><div class="row" style="margin-top:8px"><span class="grow"></span><button class="btn sm bad" data-oblrm="${i}">Odebrat oblast</button></div></div>`).join('');
+  const aut = (p.autonomie || []).map((a, i) => `<div class="row" style="margin-bottom:6px"><input class="grow" data-a="akce" data-i="${i}" value="${esc(a.akce)}" style="flex:2 1 220px"><select data-a="rezim" data-i="${i}" style="flex:1 1 160px">${['sám', 'sám, čeká ve frontě', 'jen po schválení', 'nikdy'].map(o => `<option ${a.rezim === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`).join('');
+  const rut = (p.rutiny || []).map((r, i) => `<div class="row" style="margin-bottom:6px"><input data-r="nazev" data-i="${i}" value="${esc(r.nazev)}" style="flex:2 1 180px"><input data-r="kdy" data-i="${i}" value="${esc(r.kdy)}" style="flex:2 1 180px"><select data-r="aktivni" data-i="${i}" style="flex:0 1 110px"><option value="ano" ${r.aktivni !== false ? 'selected' : ''}>zapnuto</option><option value="ne" ${r.aktivni === false ? 'selected' : ''}>vypnuto</option></select></div>`).join('');
+  const navrhy = (p.navrhy_uprav || []).filter(n => n.stav === 'navrh');
+  return `<h2>Učení asistenta</h2>
+  <p class="muted">Asistent tato pravidla načítá při každém běhu. Změna platí od dalšího spuštění rutiny.</p>
+  ${navrhy.length ? '<h3>Návrhy úprav od asistenta</h3>' + navrhy.map((n, i) => `<div class="card"><div class="title">${esc(n.text)}</div>${n.duvod ? `<div class="muted">${esc(n.duvod)}</div>` : ''}<div class="row" style="margin-top:8px"><button class="btn sm good" data-nav="prijmout" data-i="${(p.navrhy_uprav || []).indexOf(n)}">Přijmout</button><button class="btn sm bad" data-nav="zamitnout" data-i="${(p.navrhy_uprav || []).indexOf(n)}">Zamítnout</button></div></div>`).join('') : ''}
+  <h3>Profil</h3><div class="card"><textarea data-p="profil" style="min-height:110px">${esc(p.profil)}</textarea></div>
+  <h3>Oblasti</h3>${obl}<button class="btn" data-act="obladd">+ Přidat oblast</button>
+  <h3>Pravidla autonomie</h3><div class="card">${aut}</div>
+  <h3>Rutiny</h3><div class="card"><div class="muted" style="margin-bottom:6px">Název · kdy se spouští · zapnuto</div>${rut}</div>
+  <h3>Obecná pravidla</h3><div class="card"><textarea data-p="obecna_pravidla" style="min-height:140px">${esc(p.obecna_pravidla)}</textarea></div>
+  <div class="row" style="position:sticky;bottom:0;background:var(--bg);padding:12px 0"><button class="btn pri" data-act="uceniSave">Uložit pravidla</button></div>`;
+}
+function collectUceni() {
+  const p = store.pravidla;
+  document.querySelectorAll('[data-p]').forEach(el => p[el.dataset.p] = el.value);
+  document.querySelectorAll('[data-obl]').forEach(card => { const o = p.oblasti[+card.dataset.obl]; card.querySelectorAll('[data-o]').forEach(el => o[el.dataset.o] = el.value); });
+  document.querySelectorAll('[data-a]').forEach(el => p.autonomie[+el.dataset.i][el.dataset.a] = el.value);
+  document.querySelectorAll('[data-r]').forEach(el => { const r = p.rutiny[+el.dataset.i]; r[el.dataset.r] = el.dataset.r === 'aktivni' ? el.value === 'ano' : el.value; });
+}
+
+/* ---------- události ---------- */
+$('#main').addEventListener('click', async e => {
+  const t = e.target.closest('button,[data-go]'); if (!t) return;
+  if (t.dataset.go) { tab = t.dataset.go; render(); return; }
+  if (t.dataset.cview) { ui.conceptView = t.dataset.cview; render(); return; }
+  if (t.dataset.cact) { const card = t.closest('[data-cid]'); return conceptAction(card.dataset.cid, t.dataset.cact, card); }
+  if (t.dataset.oblrm != null) { collectUceni(); store.pravidla.oblasti.splice(+t.dataset.oblrm, 1); render(); return; }
+  if (t.dataset.nav) {
+    const n = store.pravidla.navrhy_uprav[+t.dataset.i]; collectUceni();
+    n.stav = t.dataset.nav === 'prijmout' ? 'prijato' : 'zamitnuto'; n.vyrizeno = today();
+    if (n.stav === 'prijato') store.pravidla.obecna_pravidla = (store.pravidla.obecna_pravidla ? store.pravidla.obecna_pravidla.trimEnd() + '\n' : '') + '- ' + n.text;
+    if (await saveFile('pravidla', 'Panel: návrh úpravy ' + n.stav)) render(); return;
+  }
+  const act = t.dataset.act;
+  if (act === 'done') { const x = store.ukoly.find(u => u.id === t.dataset.id); x.stav = 'hotovo'; x.hotovo = today(); if (await saveFile('ukoly', 'Panel: úkol hotov')) { render(); toast('Hotovo'); } return; }
+  if (act === 'add') { ui.adding = true; ui.editing = null; render(); return; }
+  if (act === 'edit') { ui.editing = t.dataset.id; ui.adding = false; render(); return; }
+  if (act === 'cancel') { ui.editing = null; ui.adding = false; render(); return; }
+  if (act === 'save') return saveForm(tab, t.closest('[data-form]'));
+  if (act === 'delete') {
+    const id = t.closest('[data-form]').dataset.form;
+    if (!confirm('Opravdu smazat? Záznam zůstane v historii repozitáře.')) return;
+    store[tab] = store[tab].filter(x => x.id !== id);
+    if (await saveFile(tab, `Panel: smazání – ${SCHEMAS[tab].title}`)) { ui.editing = null; render(); toast('Smazáno'); } return;
+  }
+  if (act === 'obladd') { collectUceni(); store.pravidla.oblasti.push({ kod: '', nazev: '', popis: '', ton: '', podpis: '' }); render(); return; }
+  if (act === 'uceniSave') { collectUceni(); if (await saveFile('pravidla', 'Panel: úprava pravidel')) { toast('Pravidla uložena'); render(); } return; }
+});
+$('#main').addEventListener('change', async e => {
+  const el = e.target;
+  if (el.dataset.filter) { (ui.filters[tab] = ui.filters[tab] || {})[el.dataset.filter] = el.value; render(); return; }
+  if (el.dataset.quick) {
+    const x = store[tab].find(i => i.id === el.dataset.id); x[el.dataset.quick] = el.value; x.upraveno = today();
+    if (await saveFile(tab, `Panel: ${SCHEMAS[tab].title} – ${el.dataset.quick} → ${el.value}`)) { render(); toast('Uloženo'); }
+  }
+});
+$('#main').addEventListener('input', e => {
+  if (e.target.dataset.q != null) { ui.q[tab] = e.target.value; const pos = e.target.selectionStart; render(); const q = document.querySelector('[data-q]'); q.focus(); q.setSelectionRange(pos, pos); }
+});
+
+/* ---------- start ---------- */
+(async () => {
+  if (!cfg.token) return render();
+  try { await loadAll(); } catch (e) { setSync(e.message); tab = '__settings'; }
+  render();
+})();
+</script>
+</body>
+</html>
