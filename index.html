@@ -89,6 +89,13 @@ h2{font-size:25px;letter-spacing:-.6px}h3{font-size:17px}.card{padding:17px 18px
 @media(max-width:800px){.area-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.task-groups{grid-template-columns:1fr}}
 @media(max-width:600px){main{padding:18px 12px}.bar{padding:12px}.bar h1{font-size:19px}.sync{font-size:11px}.area-grid{gap:9px}.area-tile{padding:13px}.area-tile strong{font-size:14px}.area-tile b{font-size:26px}.area-tile .area-desc{min-height:36px}.card{padding:14px}.group-heading{align-items:center}}
 
+
+.calendar-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0}.calendar-toolbar h3{margin:0;flex:1;text-transform:capitalize}
+.calendar-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.calendar-weekday{background:var(--surface-2);text-align:center;padding:8px;font-size:12px;font-weight:600}.calendar-day{background:var(--surface);padding:6px;min-height:108px;min-width:0}.calendar-day.outside{background:var(--bg)}.calendar-day.selected{box-shadow:inset 0 0 0 2px var(--accent)}.calendar-day.today .day-number{background:var(--accent);color:#fff;border-radius:50%}
+.day-number{display:block;border:0;background:none;cursor:pointer;width:29px;height:29px;margin-bottom:4px}.calendar-item{display:block;width:100%;text-align:left;border:0;border-left:3px solid var(--area);border-radius:4px;padding:3px 5px;margin:3px 0;font-size:11px;background:var(--area-soft);color:var(--area);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.calendar-more{font-size:11px;color:var(--muted);border:0;background:none;cursor:pointer}.calendar-agenda h3{margin-top:0}.agenda-time{font-size:12px;color:var(--muted)}.calendar-legend{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0;font-size:12px}.calendar-task-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+@media(max-width:1000px){.calendar-layout{grid-template-columns:1fr}.calendar-agenda{margin-top:8px}}@media(max-width:600px){.calendar-day{min-height:65px;padding:3px}.calendar-item{font-size:0;min-height:8px;padding:0;border-left-width:0}.calendar-weekday{padding:6px 1px}.calendar-more{font-size:10px}.day-number{width:25px;height:25px}.calendar-toolbar{gap:6px}}
+
 </style>
 </head>
 <body>
@@ -110,7 +117,7 @@ function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
 const FILES = {
   zdroje: 'zdroje.json', pravidla: 'pravidla.json', ukoly: 'ukoly.json', kontakty: 'kontakty.json',
   faktury: 'faktury.json', koncepty: 'koncepty.json', zapisy: 'zapisy.json', zpetna: 'zpetna-vazba.json',
-  report: 'reporty/dnes.md'
+  report: 'reporty/dnes.md', plandata: 'planovani.json', vecer: 'reporty/vecer.md', tyden: 'reporty/tyden.md'
 };
 const store = {}, shas = {};
 
@@ -118,7 +125,7 @@ const store = {}, shas = {};
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const today = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const fmtDate = s => { if (!s) return ''; const [y, m, d] = String(s).slice(0, 10).split('-'); return d ? `${+d}. ${+m}. ${y}` : s; };
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2400); }
 function setSync(msg) { $('#sync').textContent = msg; }
@@ -152,13 +159,13 @@ async function loadFile(key) {
   if (!r.ok) throw new Error(`GitHub vrátil chybu ${r.status} u ${FILES[key]}.`);
   const j = await r.json(); shas[key] = j.sha;
   const text = b64decode(j.content || '');
-  if (key === 'report') store[key] = text;
+  if (['report','vecer','tyden'].includes(key)) store[key] = text;
   else { try { store[key] = JSON.parse(text || 'null') ?? defaultFor(key); } catch (e) { throw new Error(`Soubor ${FILES[key]} není platný JSON.`); } }
 }
-function defaultFor(key) { return key === 'report' ? '' : key === 'pravidla' ? { profil: '', oblasti: [], autonomie: [], rutiny: [], obecna_pravidla: '' } : []; }
+function defaultFor(key) { return ['report','vecer','tyden'].includes(key) ? '' : key === 'plandata' ? {busy:[],udalosti:[],pripravy:[],chyby:['Kalendáře zatím nebyly načteny.']} : key === 'pravidla' ? { profil: '', oblasti: [], autonomie: [], rutiny: [], obecna_pravidla: '' } : []; }
 async function saveFile(key, message) {
   setSync('Ukládám…');
-  const content = key === 'report' ? store[key] : JSON.stringify(store[key], null, 2) + '\n';
+  const content = ['report','vecer','tyden'].includes(key) ? store[key] : JSON.stringify(store[key], null, 2) + '\n';
   const body = { message: message || `Panel: úprava ${FILES[key]}`, content: b64encode(content), branch: cfg.branch };
   if (shas[key]) body.sha = shas[key];
   const r = await fetch(apiUrl(FILES[key], false), { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, headers()), body: JSON.stringify(body) });
@@ -220,7 +227,7 @@ function groupedTasks(items,renderCard) {
 const oblastOpts = () => ((store.pravidla && store.pravidla.oblasti) || []).map(o => o.kod).filter(Boolean);
 const SCHEMAS = {
   ukoly: {
-    title: 'Úkoly', addLabel: 'Nový úkol', searchKeys: ['nazev', 'poznamka', 'zdroj'],
+    title: 'Úkoly', addLabel: 'Nový úkol', searchKeys: ['nazev', 'poznamka', 'zdroj', 'projekt', 'dalsi_krok', 'cekam_na', 'slib_komu'],
     fields: [
       { k: 'nazev', l: 'Úkol', t: 'text', req: 1, wide: 1 },
       { k: 'oblast', l: 'Oblast', t: 'oblast', filter: 1 },
@@ -228,9 +235,18 @@ const SCHEMAS = {
       { k: 'priorita', l: 'Priorita', t: 'select', o: ['vysoká', 'střední', 'nízká'], def: 'střední' },
       { k: 'stav', l: 'Stav', t: 'select', o: ['otevřený', 'rozpracovaný', 'čeká na jiné', 'hotovo'], def: 'otevřený', quick: 1, filter: 1 },
       { k: 'zdroj', l: 'Zdroj', t: 'text', ph: 'e-mail, Plaud, WhatsApp…' },
+      { k: 'odhad_min', l: 'Odhad délky (minuty)', t: 'number' },
+      { k: 'odhad_typ', l: 'Původ odhadu', t: 'select', o: ['odhad AI', 'vlastní odhad'], def: 'vlastní odhad' },
+      { k: 'projekt', l: 'Projekt', t: 'text', ph: 'Dům, symposium, klient…' },
+      { k: 'dalsi_krok', l: 'Nejbližší konkrétní krok', t: 'text', wide: 1 },
+      { k: 'kroky', l: 'Navržené kroky projektu (jeden na řádek)', t: 'textarea', wide: 1 },
+      { k: 'cekam_na', l: 'Na koho / na co čekám', t: 'text' },
+      { k: 'slib_komu', l: 'Komu jsem slíbil výsledek', t: 'text' },
+      { k: 'pripomenout', l: 'Připomenout / follow-up', t: 'date' },
+      { k: 'plan_datum', l: 'Plánovaný den (nemění termín)', t: 'date' },
       { k: 'poznamka', l: 'Poznámka', t: 'textarea', wide: 1 }
     ],
-    meta: x => [x.oblast && areaTag(x.oblast), x.termin && dueTag(x.termin, x.stav === 'hotovo'), x.priorita === 'vysoká' && tag('vysoká priorita', 'bad'), x.zdroj && `<span class="muted">${esc(x.zdroj)}</span>`],
+    meta: x => [x.odhad_min && tag(x.odhad_min + ' min · ' + (x.odhad_typ || 'odhad')), x.projekt && tag(x.projekt), x.oblast && areaTag(x.oblast), x.termin && dueTag(x.termin, x.stav === 'hotovo'), x.priorita === 'vysoká' && tag('vysoká priorita', 'bad'), x.zdroj && `<span class="muted">${esc(x.zdroj)}</span>`],
     sort: (a, b) => (a.stav === 'hotovo') - (b.stav === 'hotovo') || String(a.termin || '9999').localeCompare(String(b.termin || '9999')),
     doneIf: x => x.stav === 'hotovo'
   },
@@ -325,7 +341,7 @@ function stavClass(v) { return ({ 'Aktivní': 'good', 'Vypnuto': '', 'Čeká na 
 
 /* ---------- navigace ---------- */
 const TABS = [
-  ['dnes', 'Dnes'], ['schvaleni', 'Ke schválení'], ['ukoly', 'Úkoly'], ['kontakty', 'Kontakty'], ['faktury', 'Faktury'],
+  ['dnes', 'Dnes'], ['kalendar', 'Kalendář'], ['plan', 'Plán a kapacita'], ['schvaleni', 'Ke schválení'], ['ukoly', 'Úkoly'], ['kontakty', 'Kontakty'], ['faktury', 'Faktury'],
   ['zapisy', 'Zápisy'], ['zdroje', 'Zdroje'], ['uceni', 'Učení'], ['zpetna', 'Zpětná vazba']
 ];
 let tab = 'dnes';
@@ -348,6 +364,8 @@ function render() {
   renderNav();
   const m = $('#main');
   if (tab === 'dnes') m.innerHTML = renderDnes();
+  else if (tab === 'kalendar') m.innerHTML = renderCalendar();
+  else if (tab === 'plan') m.innerHTML = renderPlan();
   else if (tab === 'schvaleni') m.innerHTML = renderSchvaleni();
   else if (tab === 'uceni') m.innerHTML = renderUceni();
   else if (SCHEMAS[tab]) m.innerHTML = renderCollection(tab);
@@ -395,6 +413,7 @@ function renderDnes() {
   ${zdrojeProblem.length ? `<div class="card" style="border-color:var(--warn)"><b>Pozor na zdroje:</b> ${zdrojeProblem.map(z => esc(z.nazev)).join(', ')}</div>` : ''}
   <div class="group-heading"><h3>Otevřené úkoly podle oblastí</h3><button class="btn sm" data-go="ukoly">Všechny úkoly →</button></div>
   ${groupedTasks(ukoly.slice().sort(SCHEMAS.ukoly.sort), x => '<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="row"><span class="grow title">'+esc(x.nazev)+'</span></div><div class="row task-meta">'+(x.termin?dueTag(x.termin):'<span class="muted">Bez termínu</span>')+(x.priorita==='vysoká'?tag('Vysoká priorita','bad'):'')+'<span class="grow"></span><button class="btn sm" data-act="done" data-id="'+esc(x.id)+'">Hotovo</button></div></div>')}
+  <div class="card"><div class="row"><b class="grow">Co se dnes opravdu vejde?</b><button class="btn pri" data-go="plan">Plán, termíny a uzavření dne →</button></div></div>
   <h3>Report asistenta</h3>
   <div class="card md">${store.report ? mdToHtml(store.report) : '<span class="muted">Asistent zatím report nevytvořil. Objeví se tu po prvním ranním běhu.</span>'}</div>
   ${late.length ? '<h3>Po termínu</h3>' + list(late, taskCard) : ''}
@@ -451,7 +470,7 @@ function renderCollection(key) {
     const quick = S.fields.filter(fd => fd.quick).map(fd => `<select class="inline" data-quick="${fd.k}" data-id="${esc(x.id)}" title="${esc(fd.l)}">${fd.o.map(o => `<option ${x[fd.k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).join('');
     const title = S.titleOf ? S.titleOf(x) : x[S.fields[0].k];
     return `<div class="card area-card ${areaInfo(x.oblast).cls} ${S.doneIf && S.doneIf(x) ? 'done' : ''}"><div class="row"><span class="grow title">${esc(title)}</span>${quick}<button class="btn sm" data-act="edit" data-id="${esc(x.id)}">Upravit</button></div>
-      ${meta ? `<div class="row task-meta">${meta}</div>` : ''}${key === 'ukoly' && x.poznamka ? `<div class="task-note">${esc(x.poznamka)}</div>` : ''}${S.body ? S.body(x) : ''}</div>`;
+      ${meta ? `<div class="row task-meta">${meta}</div>` : ''}${key === 'ukoly' ? taskDetails(x) : ''}${key === 'ukoly' && x.poznamka ? `<div class="task-note">${esc(x.poznamka)}</div>` : ''}${S.body ? S.body(x) : ''}</div>`;
   };
   return `<h2>${esc(S.title)} <span class="muted">(${items.length})</span></h2>${S.intro ? `<p class="muted">${esc(S.intro)}</p>` : ''}${key === 'ukoly' ? areaOverview() : ''}${S.fields.some(fd=>fd.k==='oblast') ? areaFilters(key) : ''}${toolbar}
     ${ui.adding ? formHtml(key, null) : ''}
@@ -473,11 +492,13 @@ function formHtml(key, x) {
 async function saveForm(key, formEl) {
   const S = SCHEMAS[key]; const id = formEl.dataset.form; const data = {};
   formEl.querySelectorAll('[data-f]').forEach(el => { const fd = S.fields.find(f => f.k === el.dataset.f); data[el.dataset.f] = fd && fd.t === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value.trim(); });
+  if (key==='ukoly' && data.odhad_min!=='' && (!Number.isFinite(data.odhad_min) || data.odhad_min<5 || data.odhad_min>480)) { toast('Odhad délky musí být 5 až 480 minut.'); return; }
   const missing = S.fields.filter(fd => fd.req && !data[fd.k]);
   if (missing.length) { toast('Vyplňte: ' + missing.map(m => m.l).join(', ')); return; }
   store[key] = store[key] || [];
   if (id === '__new') store[key].push(Object.assign({ id: uid(), vytvoreno: today(), zdroj_zapisu: 'panel' }, data));
   else Object.assign(store[key].find(x => x.id === id), data, { upraveno: today() });
+  if (key==='ukoly' && data.stav==='hotovo') { const item=store[key].find(x=>x.id===id) || store[key][store[key].length-1]; if(!item.hotovo) item.hotovo=today(); }
   if (await saveFile(key, `Panel: ${id === '__new' ? 'nový záznam' : 'úprava'} – ${S.title}`)) { ui.editing = null; ui.adding = false; render(); toast('Uloženo'); }
 }
 
@@ -546,12 +567,167 @@ $('#main').addEventListener('change', async e => {
   const el = e.target;
   if (el.dataset.filter) { (ui.filters[tab] = ui.filters[tab] || {})[el.dataset.filter] = el.value; render(); return; }
   if (el.dataset.quick) {
-    const x = store[tab].find(i => i.id === el.dataset.id); x[el.dataset.quick] = el.value; x.upraveno = today();
+    const x = store[tab].find(i => i.id === el.dataset.id); x[el.dataset.quick] = el.value; x.upraveno = today(); if (tab==='ukoly' && el.dataset.quick==='stav' && el.value==='hotovo') x.hotovo=today();
     if (await saveFile(tab, `Panel: ${SCHEMAS[tab].title} – ${el.dataset.quick} → ${el.value}`)) { render(); toast('Uloženo'); }
   }
 });
 $('#main').addEventListener('input', e => {
   if (e.target.dataset.q != null) { ui.q[tab] = e.target.value; const pos = e.target.selectionStart; render(); const q = document.querySelector('[data-q]'); q.focus(); q.setSelectionRange(pos, pos); }
+});
+
+
+/* ---------- Plánování času ---------- */
+const planUI={date:today(),duration:30};
+function taskDetails(x) {
+  return (x.dalsi_krok ? '<div class="task-note"><b>Další krok:</b> '+esc(x.dalsi_krok)+'</div>':'')
+    +(x.kroky ? '<details class="task-note"><summary>Kroky projektu</summary><p style="white-space:pre-wrap">'+esc(x.kroky)+'</p></details>':'')
+    +(x.cekam_na ? '<div class="task-note">Čekám na: '+esc(x.cekam_na)+'</div>':'')
+    +(x.slib_komu ? '<div class="task-note">Slíbeno: '+esc(x.slib_komu)+'</div>':'')
+    +(x.pripomenout ? '<div class="task-note">Follow-up: '+fmtDate(x.pripomenout)+'</div>':'');
+}
+function nextDate(d) { const t=new Date(d+'T12:00:00Z');t.setUTCDate(t.getUTCDate()+1);return t.toISOString().slice(0,10); }
+function localInstant(date,hm) {
+  let target=Date.parse(date+'T'+hm+':00Z'),value=target;
+  for(let i=0;i<3;i++){
+    const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date(value)).map(x=>[x.type,x.value]));
+    value+=target-Date.parse(p.year+'-'+p.month+'-'+p.day+'T'+p.hour+':'+p.minute+':'+p.second+'Z');
+  }
+  return value;
+}
+function planningCfg() { return Object.assign({zacatek:'09:00',konec:'17:00',rezerva_min:15,kapacita_procent:70},store.pravidla?.planovani||{}); }
+function calendarIssue(date) {
+  const p=store.plandata||{};
+  if(!p.aktualizovano || !p.od || !p.do || date<p.od || date>p.do) return 'Pro tento den nejsou načtené kalendáře. Počkej na aktualizaci asistenta.';
+  if(p.chyby?.length) return 'Některé kalendáře se nepodařilo načíst. Volné termíny nelze spolehlivě určit.';
+  if(Date.now()-Date.parse(p.aktualizovano)>24*3600000) return 'Podklady kalendářů jsou starší než 24 hodin. Počkej na obnovení.';
+  return '';
+}
+function freeWindows(date,now=Date.now()) {
+  if(calendarIssue(date))return [];
+  const c=planningCfg(),begin=localInstant(date,c.zacatek),end=localInstant(date,c.konec),pad=Math.max(0,Number(c.rezerva_min)||0)*60000;
+  let cursor=Math.max(begin, date===today()?Math.ceil(now/300000)*300000:begin);
+  if(cursor>=end)return [];
+  const intervals=(store.plandata.busy||[]).map(b=>[(/^\d{4}-\d{2}-\d{2}$/.test(b.start)?localInstant(b.start,'00:00'):Date.parse(b.start))-pad,(/^\d{4}-\d{2}-\d{2}$/.test(b.end)?localInstant(b.end,'00:00'):Date.parse(b.end))+pad]).filter(b=>Number.isFinite(b[0])&&Number.isFinite(b[1])&&b[1]>cursor&&b[0]<end).sort((a,b)=>a[0]-b[0]);
+  const result=[];for(const [a,b]of intervals){if(a>cursor)result.push([cursor,Math.min(a,end)]);cursor=Math.max(cursor,b);if(cursor>=end)break;}if(cursor<end)result.push([cursor,end]);return result;
+}
+function minutesOf(x) { return Math.max(5,Math.min(480,Number(x.odhad_min)||30)); }
+function priorityTasks(date) {
+  const rank={'vysoká':0,'střední':1,'nízká':2};
+  return (store.ukoly||[]).filter(x=>x.stav!=='hotovo'&&x.stav!=='čeká na jiné'&&!x.cekam_na&&(!x.plan_datum||x.plan_datum<=date))
+    .sort((a,b)=>Number(!!b.termin&&b.termin<=date)-Number(!!a.termin&&a.termin<=date)||(rank[a.priorita]??1)-(rank[b.priorita]??1)||String(a.termin||'9999').localeCompare(String(b.termin||'9999')));
+}
+function makeDayPlan(date,now=Date.now()) {
+  const windows=freeWindows(date,now).map(x=>x.slice()),raw=windows.reduce((n,w)=>n+(w[1]-w[0])/60000,0);
+  const capacity=Math.floor(raw*Math.max(10,Math.min(100,Number(planningCfg().kapacita_procent)||70))/100);
+  let used=0;const slots=[],backlog=[];
+  for(const x of priorityTasks(date)){
+    const minutes=minutesOf(x),index=windows.findIndex(w=>w[1]-w[0]>=minutes*60000);
+    if(slots.length>=3||used+minutes>capacity||index<0){backlog.push(x);continue;}
+    const start=windows[index][0];slots.push({task:x,start,end:start+minutes*60000,minutes});windows[index][0]+=minutes*60000;used+=minutes;
+  }
+  return {slots,backlog,capacity,used,free:Math.floor(raw)};
+}
+const timeLabel = n => new Date(n).toLocaleTimeString('cs-CZ',{timeZone:'Europe/Prague',hour:'2-digit',minute:'2-digit'});
+function renderPlan() {
+  const date=planUI.date,c=planningCfg(),p=makeDayPlan(date),issue=calendarIssue(date),all=store.ukoly||[];
+  const waiting=all.filter(x=>x.stav!=='hotovo'&&(x.cekam_na||x.stav==='čeká na jiné'||x.slib_komu||x.pripomenout));
+  const events=(store.plandata?.pripravy||[]).filter(e=>e.start&&new Date(e.start).getTime()>=Date.now()).sort((a,b)=>a.start.localeCompare(b.start));
+  const duration=Number(planUI.duration)||30;
+  const suggestions=freeWindows(date).flatMap(w=>{let a=[];for(let t=w[0];t+duration*60000<=w[1]&&a.length<3;t+=Math.max(30,duration+Number(c.rezerva_min))*60000)a.push([t,t+duration*60000]);return a;}).slice(0,3);
+  const open=all.filter(x=>x.stav!=='hotovo');
+  return '<h2>Plán a kapacita</h2><p class="overview-intro">Tři priority, čas na soustředění a prostor pro nečekané věci.</p>'
+  +'<div class="card" style="margin-top:18px"><div class="form"><div><label for="planDate">Den</label><input id="planDate" type="date" value="'+esc(date)+'"></div><div><label for="dayStart">Začátek dne</label><input id="dayStart" type="time" value="'+esc(c.zacatek)+'"></div><div><label for="dayEnd">Konec dne</label><input id="dayEnd" type="time" value="'+esc(c.konec)+'"></div><div><label for="bufferMin">Rezerva kolem schůzek (min)</label><input id="bufferMin" type="number" min="0" max="120" value="'+esc(c.rezerva_min)+'"></div><div><label for="capacityPct">Kolik volného času plánovat (%)</label><input id="capacityPct" type="number" min="10" max="100" value="'+esc(c.kapacita_procent)+'"></div></div><button class="btn" style="margin-top:12px" data-plan-act="settings">Uložit kapacitu</button><p class="muted">Výchozí návrh je 9–17, 15 minut na přípravu/přesun a 30 % volné kapacity jako rezerva. Uprav podle svého dne.</p></div>'
+  +(issue?'<div class="card"><b>'+esc(issue)+'</b></div>':'')
+  +'<p class="muted">Kalendáře aktualizované: '+esc(store.plandata?.aktualizovano?new Date(store.plandata.aktualizovano).toLocaleString('cs-CZ',{timeZone:'Europe/Prague'}):'zatím ne')+'. Návrhy platí pro načtené aktivní kalendáře; dostupnost ostatních lidí není ověřená.</p>'
+  +'<div class="stats"><div class="stat">Volno po odečtení schůzek a rezerv<b>'+p.free+' min</b></div><div class="stat">Kapacita na úkoly<b>'+p.capacity+' min</b></div><div class="stat">Navržené úkoly<b>'+p.used+' min</b></div></div>'
+  +'<h3>Navržené tři priority</h3>'+ (p.slots.length?p.slots.map((q,i)=>'<div class="card area-card '+areaInfo(q.task.oblast).cls+'"><div class="row"><b>'+timeLabel(q.start)+'–'+timeLabel(q.end)+'</b>'+areaTag(q.task.oblast)+'<span class="grow"></span><button class="btn sm" data-go-task="'+esc(q.task.id)+'">Upravit</button></div><h3>'+(i+1)+'. '+esc(q.task.nazev)+'</h3><span class="muted">'+q.minutes+' min · '+esc(q.task.odhad_typ||'výchozí odhad 30 min')+'</span>'+taskDetails(q.task)+'</div>').join(''):'<div class="empty">Do zbývající kapacity se žádný úkol nevejde. Zvol další den, zkrať úkol nebo uprav kapacitu.</div>')
+  +(p.backlog.length?'<p class="muted">'+p.backlog.length+' dalších úkolů zůstává mimo návrh. Neplánuji více, než se vejde.</p>':'')
+  +'<h3>Návrhy termínů schůzky</h3><div class="card"><label for="meetingMinutes">Délka schůzky</label><select id="meetingMinutes">'+[15,30,45,60,90,120].map(m=>'<option value="'+m+'" '+(m===duration?'selected':'')+'>'+m+' minut</option>').join('')+'</select><div style="margin-top:12px">'+(suggestions.length?suggestions.map(w=>'<div class="row" style="padding:9px 0"><b>'+fmtDate(date)+' · '+timeLabel(w[0])+'–'+timeLabel(w[1])+'</b></div>').join(''):'<p class="muted">Žádné ověřené okno této délky.</p>')+'</div><p class="muted">Návrhy jsou alternativy před rezervací úkolů a musí se ověřit s protistranou. Do kalendáře se nic nezapisuje.</p></div>'
+  +'<h3>Sliby a čekání na druhé</h3>'+(waiting.length?waiting.map(x=>'<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="row"><b class="grow">'+esc(x.nazev)+'</b><button class="btn sm" data-go-task="'+esc(x.id)+'">Upravit</button></div>'+taskDetails(x)+'</div>').join(''):'<div class="empty">Zatím nejsou evidované žádné sliby nebo čekání. Vyplň je u úkolu; asistent je také doplní z doložených zpráv.</div>')
+  +'<h3>Příprava na nejbližší schůzky</h3>'+(events.length?events.slice(0,6).map(e=>'<div class="card"><b>'+esc(e.nazev)+'</b><p class="muted">'+new Date(e.start).toLocaleString('cs-CZ',{timeZone:'Europe/Prague'})+'</p><div class="md">'+mdToHtml(e.body)+'</div></div>').join(''):'<div class="empty">V načtených podkladech nejsou další schůzky.</div>')
+  +'<h3>Večerní uzavření dne</h3><p class="muted">Co je hotové? Co blokuje postup? Co přesunout? Tlačítko přesune pouze plánovaný den, nikdy skutečný termín.</p>'
+  +(open.length?open.map(x=>'<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="row"><span class="grow">'+esc(x.nazev)+'</span><button class="btn sm good" data-plan-done="'+esc(x.id)+'">Hotovo</button><button class="btn sm" data-plan-move="'+esc(x.id)+'">Plánovat '+fmtDate(nextDate(date))+'</button></div></div>').join(''):'<div class="empty">Všechny úkoly jsou hotové.</div>')
+  +'<div class="card"><label for="eveningNote">Co se podařilo a co tě zablokovalo?</label><textarea id="eveningNote" placeholder="Krátká reflexe dne…"></textarea><button class="btn" data-plan-act="reflection">Uložit reflexi</button></div>'
+  +(store.vecer?'<div class="card md">'+mdToHtml(store.vecer)+'</div>':'')
+  +'<h3>Týdenní přehled čtyř oblastí</h3><div class="area-grid">'+AREAS.map(a=>{const rows=all.filter(x=>x.oblast===a.key),active=rows.filter(x=>x.stav!=='hotovo'),stale=active.filter(x=>x.vytvoreno&&new Date(today()+'T12:00Z')-new Date(x.upraveno||x.vytvoreno)>14*86400000);return '<div class="area-tile '+a.cls+'"><strong>'+esc(a.label)+'</strong><div class="area-count"><b>'+active.length+'</b><span class="muted">otevřených</span></div><span class="area-foot">'+active.reduce((n,x)=>n+minutesOf(x),0)+' min odhadované práce · '+stale.length+' bez změny 14+ dní</span></div>';}).join('')+'</div>'
+  +(store.tyden?'<div class="card md">'+mdToHtml(store.tyden)+'</div>':'<p class="muted">Slovní týdenní přehled připraví páteční automatizace.</p>');
+}
+$('#main').addEventListener('change',e=>{
+ if(e.target.id==='planDate'){planUI.date=e.target.value||today();render();}
+ if(e.target.id==='meetingMinutes'){planUI.duration=Number(e.target.value);render();}
+});
+$('#main').addEventListener('click',async e=>{
+ const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.goContact){tab='kontakty';ui.filters.kontakty={};ui.q.kontakty='';ui.editing=b.dataset.goContact;ui.adding=false;render();return;}
+ if(b.dataset.goTask){tab='ukoly';ui.filters.ukoly={};ui.q.ukoly='';ui.editing=b.dataset.goTask;ui.adding=false;render();return;}
+ if(b.dataset.planDone||b.dataset.planMove){
+  const x=(store.ukoly||[]).find(t=>t.id===(b.dataset.planDone||b.dataset.planMove));if(!x)return;
+  if(b.dataset.planDone){x.stav='hotovo';x.hotovo=today();}else{x.plan_datum=nextDate(planUI.date);}
+  x.upraveno=today();if(await saveFile('ukoly','Panel: uzavření dne'))render();return;
+ }
+ if(b.dataset.planAct==='settings'){
+  const begin=$('#dayStart').value,end=$('#dayEnd').value,buffer=Number($('#bufferMin').value),pct=Number($('#capacityPct').value);
+  if(!begin||!end||begin>=end||!Number.isFinite(buffer)||buffer<0||buffer>120||pct<10||pct>100){toast('Zkontroluj časové okno, rezervu a procento kapacity.');return;}
+  store.pravidla=store.pravidla||defaultFor('pravidla');
+  store.pravidla.planovani=Object.assign({},store.pravidla.planovani,{zacatek:begin,konec:end,rezerva_min:buffer,kapacita_procent:pct});
+  if(await saveFile('pravidla','Panel: kapacita a rezervy')){render();toast('Kapacita uložena');}
+ }
+ if(b.dataset.planAct==='reflection'){
+  const text=$('#eveningNote').value.trim();if(!text){toast('Napiš krátkou reflexi.');return;}
+  store.zapisy=store.zapisy||[];store.zapisy.push({id:uid(),vytvoreno:today(),zdroj_zapisu:'panel',datum:planUI.date,nazev:'Večerní reflexe',oblast:'Osobní',zdroj:'ručně',text});
+  if(await saveFile('zapisy','Panel: večerní reflexe')){toast('Reflexe uložena');render();}
+ }
+});
+
+
+/* ---------- Interaktivní kalendář ---------- */
+const calUI={date:today(),month:today().slice(0,7),area:''};
+function pragueDate(value) {
+ if(!value)return '';if(/^\d{4}-\d{2}-\d{2}$/.test(value))return value;
+ const d=new Date(value);return Number.isNaN(d.getTime())?'':new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Prague'}).format(d);
+}
+function calendarItems(date) {
+ const tasks=(store.ukoly||[]).filter(x=>x.stav!=='hotovo'&&(!calUI.area||x.oblast===calUI.area)).filter(x=>x.termin===date||x.plan_datum===date||x.pripomenout===date).map(x=>({kind:'task',id:x.id,title:x.nazev,oblast:x.oblast,task:x,label:x.termin===date?'Termín':x.pripomenout===date?'Follow-up':'Plán'}));
+ const events=(store.plandata?.udalosti||[]).filter(x=>!calUI.area||x.oblast===calUI.area).filter(x=>pragueDate(x.start)<=date&&pragueDate(x.end)>=date&&Date.parse(x.end)>localInstant(date,'00:00')).map(x=>({kind:'event',id:x.id,title:x.title,oblast:x.oblast,event:x,label:/^\d{4}-\d{2}-\d{2}$/.test(x.start)?'Celý den':timeLabel(Date.parse(x.start))}));
+ const busy=(store.plandata?.busy||[]).filter(x=>x.source==='loc-cal'&&(!calUI.area||calUI.area==='LOC')&&Date.parse(x.start)<localInstant(nextDate(date),'00:00')&&Date.parse(x.end)>localInstant(date,'00:00'));
+ const dedup=Array.from(new Map(busy.map(x=>[x.start+'|'+x.end,x])).values()).map(x=>({kind:'busy',title:'Lab On Card · obsazeno',oblast:'LOC',label:timeLabel(Date.parse(x.start))+'–'+timeLabel(Date.parse(x.end))}));
+ const followups=(store.kontakty||[]).filter(x=>x.followup===date&&(!calUI.area||x.oblast===calUI.area)).map(x=>({kind:'contact',id:x.id,title:'Ozvat se: '+x.jmeno,oblast:x.oblast,label:'Follow-up',contact:x}));
+ return [...events,...dedup,...tasks,...followups];
+}
+function renderCalendar() {
+ const [y,m]=calUI.month.split('-').map(Number),first=new Date(Date.UTC(y,m-1,1,12)),offset=(first.getUTCDay()+6)%7;
+ const start=new Date(first);start.setUTCDate(1-offset);
+ let cells='';
+ for(let i=0;i<42;i++){
+  const d=new Date(start);d.setUTCDate(start.getUTCDate()+i);const date=d.toISOString().slice(0,10),items=calendarItems(date);
+  cells+='<div class="calendar-day '+(date.slice(0,7)!==calUI.month?'outside ':'')+(date===calUI.date?'selected ':'')+(date===today()?'today':'')+'"><button class="day-number" data-cal-date="'+date+'" aria-label="'+fmtDate(date)+'">'+d.getUTCDate()+'</button>'
+   +items.slice(0,3).map(x=>'<button class="calendar-item '+areaInfo(x.oblast).cls+'" title="'+esc(x.label+' · '+x.title)+'" '+(x.kind==='task'?'data-go-task="'+esc(x.id)+'"':'data-cal-date="'+date+'"')+'>'+esc(x.label+' · '+x.title)+'</button>').join('')
+   +(items.length>3?'<button class="calendar-more" data-cal-date="'+date+'">+'+(items.length-3)+' další</button>':'')+'</div>';
+ }
+ const selected=calendarItems(calUI.date);
+ const undated=(store.ukoly||[]).filter(x=>x.stav!=='hotovo'&&!x.termin&&!x.plan_datum&&(!calUI.area||x.oblast===calUI.area));
+ const issue=calendarIssue(calUI.date);
+ return '<h2>Kalendář</h2><p class="overview-intro">Schůzky, termíny a plánované úkoly. Klikni na den pro podrobnosti, na úkol pro úpravu.</p>'
+ +'<div class="calendar-toolbar"><button class="btn" data-cal-month="-1" aria-label="Předchozí měsíc">←</button><h3>'+first.toLocaleDateString('cs-CZ',{timeZone:'UTC',month:'long',year:'numeric'})+'</h3><button class="btn" data-cal-month="1" aria-label="Další měsíc">→</button><button class="btn" data-cal-today>Dnes</button><select id="calArea" style="width:auto" aria-label="Oblast"><option value="">Všechny oblasti</option>'+AREAS.map(a=>'<option value="'+esc(a.key)+'" '+(calUI.area===a.key?'selected':'')+'>'+esc(a.label)+'</option>').join('')+'</select></div>'
+ +'<div class="calendar-legend">'+AREAS.map(a=>'<span class="'+a.cls+'"><span class="area-dot" aria-hidden="true"></span>'+esc(a.label)+'</span>').join('')+'</div>'
+ +'<div class="calendar-layout"><div><div class="calendar-grid">'+['Po','Út','St','Čt','Pá','So','Ne'].map(x=>'<div class="calendar-weekday">'+x+'</div>').join('')+cells+'</div><p class="muted">Kalendáře načtené '+esc(store.plandata?.od||'—')+' až '+esc(store.plandata?.do||'—')+'. Mimo tento rozsah se zobrazují jen uložené úkoly. Na mobilu barevné značky otevři výběrem dne.</p></div>'
+ +'<aside class="calendar-agenda"><h3>'+fmtDate(calUI.date)+'</h3>'+(issue?'<p class="muted">'+esc(issue)+'</p>':'')
+ +'<button class="btn pri" data-cal-plan="'+calUI.date+'">Naplánovat tento den →</button>'
+ +'<button class="btn" style="margin:8px 0" data-cal-new="'+calUI.date+'">+ Úkol na tento den</button>'
+ +(selected.length?selected.map(x=>'<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="agenda-time">'+esc(x.label)+'</div><b>'+esc(x.title)+'</b>'
+ +(x.kind==='contact'?'<div class="calendar-task-actions"><button class="btn sm" data-go-contact="'+esc(x.id)+'">Otevřít kontakt</button></div>':x.kind==='task'?'<div class="calendar-task-actions"><button class="btn sm" data-go-task="'+esc(x.id)+'">Otevřít úkol</button><button class="btn sm good" data-plan-done="'+esc(x.id)+'">Hotovo</button></div>':x.kind==='event'?'<p class="task-note">'+esc((store.plandata?.pripravy||[]).find(p=>p.event_id===x.id)?.body||x.event.description||'Bez dalších podkladů.')+'</p>':'')+'</div>').join(''):'<div class="empty" style="margin-top:10px">Pro tento den nejsou uložené položky.</div>')
+ +'</aside></div><h3>Úkoly bez termínu a bez plánovaného dne</h3><p class="muted">Vyber den v kalendáři a přiřaď mu úkol. Skutečný termín zůstane prázdný.</p>'
+ +(undated.length?undated.map(x=>'<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="row"><span class="grow">'+esc(x.nazev)+'</span><button class="btn sm" data-go-task="'+esc(x.id)+'">Upravit</button><button class="btn sm" data-cal-assign="'+esc(x.id)+'">Plánovat '+fmtDate(calUI.date)+'</button></div></div>').join(''):'<div class="empty">Žádné nezařazené úkoly.</div>');
+}
+$('#main').addEventListener('change',e=>{if(e.target.id==='calArea'){calUI.area=e.target.value;render();}});
+$('#main').addEventListener('click',async e=>{
+ const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.calDate){calUI.date=b.dataset.calDate;render();return;}
+ if(b.dataset.calMonth){const [y,m]=calUI.month.split('-').map(Number),d=new Date(Date.UTC(y,m-1+Number(b.dataset.calMonth),1,12));calUI.month=d.toISOString().slice(0,7);calUI.date=calUI.month+'-01';render();return;}
+ if(b.hasAttribute('data-cal-today')){calUI.date=today();calUI.month=today().slice(0,7);render();return;}
+ if(b.dataset.calPlan){planUI.date=b.dataset.calPlan;tab='plan';render();return;}
+ if(b.dataset.calNew){tab='ukoly';ui.filters.ukoly={oblast:calUI.area};ui.editing=null;ui.adding=true;render();const el=document.querySelector('[data-f="plan_datum"]');if(el)el.value=b.dataset.calNew;return;}
+ if(b.dataset.calAssign){const x=(store.ukoly||[]).find(x=>x.id===b.dataset.calAssign);if(!x)return;x.plan_datum=calUI.date;x.upraveno=today();if(await saveFile('ukoly','Panel: naplánování úkolu v kalendáři'))render();}
 });
 
 /* ---------- start ---------- */
