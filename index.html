@@ -61,6 +61,34 @@ label{display:block;font-size:13px;color:var(--muted);margin:8px 0 3px}
 .done .title{text-decoration:line-through;color:var(--muted)}
 pre.draft{white-space:pre-wrap;font:inherit;margin:6px 0;background:var(--surface-2);padding:8px 10px;border-radius:8px}
 @media (max-width:600px){main{padding:12px}.bar{padding:10px 12px}}
+
+/* Přehled oblastí */
+:root{--radius:14px;--bg:#f3f5f8;--border:#e0e5ed;--muted:#606c80;--text:#202b3d;--shadow:0 4px 18px rgba(27,43,69,.04)}
+.bar,nav,main{max-width:1180px}main{padding:26px 24px}.bar{padding:16px 24px}.bar h1{font-size:21px;letter-spacing:-.6px}
+h2{font-size:25px;letter-spacing:-.6px}h3{font-size:17px}.card{padding:17px 18px}.title{line-height:1.55}.btn{min-height:36px}.btn:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.area-cometx{--area:#7645bd;--area-soft:#f1eafb}
+.area-personal{--area:#22764f;--area-soft:#e8f4ed}
+.area-loc{--area:#245fc0;--area-soft:#eaf1fe}
+.area-consult{--area:#9a570c;--area-soft:#fff2df}
+.area-other{--area:#657185;--area-soft:#edf0f5}
+.area-tag{background:var(--area-soft)!important;color:var(--area)!important;font-weight:650;padding:3px 10px}
+.area-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--area);margin-right:7px}
+.area-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0 24px}
+.area-tile{position:relative;text-align:left;padding:18px;border:1px solid var(--border);border-top:4px solid var(--area);border-radius:14px;background:var(--surface);cursor:pointer;box-shadow:var(--shadow)}
+.area-tile:hover{background:var(--area-soft)}.area-tile strong{display:block;font-size:16px;color:var(--area)}.area-tile .area-desc{display:block;color:var(--muted);font-size:12px;min-height:36px;margin-top:4px}
+.area-tile b{font-size:32px;letter-spacing:-1px}.area-tile .area-count{display:flex;align-items:baseline;gap:8px;margin-top:13px}
+.area-tile .area-foot{display:block;font-size:12px;margin-top:5px;color:var(--muted)}
+.area-card{border-left:4px solid var(--area)}.area-card .muted{overflow-wrap:anywhere}
+.area-filters{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.area-filter{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:8px 13px;cursor:pointer;font-size:13px}
+.area-filter[aria-pressed="true"]{background:var(--area-soft,var(--accent-soft));border-color:var(--area,var(--accent));box-shadow:inset 0 0 0 1px var(--area,var(--accent))}
+.task-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:18px 0 28px}.task-group{min-width:0}.task-group h3{display:flex;align-items:center;gap:8px;color:var(--area);margin:0 0 12px}.task-group h3 .tag{margin-left:auto}.task-group .empty{text-align:left;background:var(--area-soft);border:0;font-size:13px}
+.task-note{margin-top:9px;font-size:13px;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}.task-meta{margin-top:9px}
+.overview-intro{margin:0;color:var(--muted)}.report-section{margin-top:24px}.stats{gap:12px}.stat{border-radius:12px;padding:14px}.stat b{font-size:27px}.group-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:24px}
+@media(prefers-color-scheme:dark){:root{--bg:#121923;--surface:#1b2533;--surface-2:#243143;--border:#344156;--text:#edf2fa;--muted:#aab8cc}
+.area-cometx{--area:#c5a6ff;--area-soft:#302343}.area-personal{--area:#86d4ab;--area-soft:#1c362e}.area-loc{--area:#95b9ff;--area-soft:#203352}.area-consult{--area:#f3c17f;--area-soft:#3b2d1f}.area-other{--area:#b9c5d8;--area-soft:#2a3546}}
+@media(max-width:800px){.area-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.task-groups{grid-template-columns:1fr}}
+@media(max-width:600px){main{padding:18px 12px}.bar{padding:12px}.bar h1{font-size:19px}.sync{font-size:11px}.area-grid{gap:9px}.area-tile{padding:13px}.area-tile strong{font-size:14px}.area-tile b{font-size:26px}.area-tile .area-desc{min-height:36px}.card{padding:14px}.group-heading{align-items:center}}
+
 </style>
 </head>
 <body>
@@ -154,6 +182,40 @@ async function loadAll() {
   setSync('Načteno ' + new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }));
 }
 
+
+const AREAS = [
+  {key:'CometX',label:'CometX',desc:'Komunita, spolek a SCAS',cls:'area-cometx'},
+  {key:'Osobní',label:'Osobní',desc:'Dům, rodina a osobní schůzky',cls:'area-personal'},
+  {key:'LOC',label:'Lab On Card',desc:'Práce, partneři a projekty',cls:'area-loc'},
+  {key:'Konzultace',label:'Konzultace',desc:'Vedlejší obživa a klienti',cls:'area-consult'}
+];
+function areaInfo(key) { return AREAS.find(a => a.key === key) || {key:key || '', label:key || 'Bez oblasti', cls:'area-other',desc:''}; }
+function areaTag(key) { const a=areaInfo(key); return '<span class="tag area-tag '+a.cls+'"><span class="area-dot" aria-hidden="true"></span>'+esc(a.label)+'</span>'; }
+function areaOverview() {
+  const tasks=(store.ukoly||[]).filter(x=>x.stav!=='hotovo');
+  return '<div class="area-grid">'+AREAS.map(a=>{
+    const items=tasks.filter(x=>x.oblast===a.key);
+    const late=items.filter(x=>x.termin && x.termin<today()).length;
+    const urgent=items.filter(x=>x.priorita==='vysoká').length;
+    return '<button class="area-tile '+a.cls+'" data-open-area="'+esc(a.key)+'" aria-label="'+esc(a.label)+': '+items.length+' otevřených úkolů"><strong><span class="area-dot" aria-hidden="true"></span>'+esc(a.label)+'</strong><span class="area-desc">'+esc(a.desc)+'</span><span class="area-count"><b>'+items.length+'</b><span class="muted">otevřených úkolů</span></span><span class="area-foot">'+(late?late+' po termínu':urgent?urgent+' s vysokou prioritou':'Zobrazit úkoly →')+'</span></button>';
+  }).join('')+'</div>';
+}
+function areaFilters(key) {
+  const selected=(ui.filters[key]||{}).oblast||'';
+  const values=Array.from(new Set(AREAS.map(a=>a.key).concat((store[key]||[]).map(x=>x.oblast).filter(Boolean))));
+  return '<div class="area-filters" role="group" aria-label="Filtrovat podle oblasti"><button class="area-filter" data-area-filter="" aria-pressed="'+(!selected)+'">Všechny oblasti</button>'+values.map(k=>{
+    const a=areaInfo(k),n=(store[key]||[]).filter(x=>x.oblast===k).length;
+    return '<button class="area-filter '+a.cls+'" data-area-filter="'+esc(k)+'" aria-pressed="'+(selected===k)+'"><span class="area-dot" aria-hidden="true"></span>'+esc(a.label)+' · '+n+'</button>';
+  }).join('')+'</div>';
+}
+function groupedTasks(items,renderCard) {
+  const keys=Array.from(new Set(AREAS.map(a=>a.key).concat(items.map(x=>x.oblast||''))));
+  return '<div class="task-groups">'+keys.map(k=>{
+    const a=areaInfo(k),rows=items.filter(x=>(x.oblast||'')===k);
+    return '<section class="task-group '+a.cls+'"><h3><span><span class="area-dot" aria-hidden="true"></span>'+esc(a.label)+'</span><span class="tag">'+rows.length+'</span></h3>'+(rows.length?rows.map(renderCard).join(''):'<div class="empty">V této oblasti nejsou žádné úkoly.</div>')+'</section>';
+  }).join('')+'</div>';
+}
+
 /* ---------- schémata kolekcí ---------- */
 const oblastOpts = () => ((store.pravidla && store.pravidla.oblasti) || []).map(o => o.kod).filter(Boolean);
 const SCHEMAS = {
@@ -168,7 +230,7 @@ const SCHEMAS = {
       { k: 'zdroj', l: 'Zdroj', t: 'text', ph: 'e-mail, Plaud, WhatsApp…' },
       { k: 'poznamka', l: 'Poznámka', t: 'textarea', wide: 1 }
     ],
-    meta: x => [x.oblast && tag(x.oblast, 'acc'), x.termin && dueTag(x.termin, x.stav === 'hotovo'), x.priorita === 'vysoká' && tag('vysoká priorita', 'bad'), x.zdroj && `<span class="muted">${esc(x.zdroj)}</span>`],
+    meta: x => [x.oblast && areaTag(x.oblast), x.termin && dueTag(x.termin, x.stav === 'hotovo'), x.priorita === 'vysoká' && tag('vysoká priorita', 'bad'), x.zdroj && `<span class="muted">${esc(x.zdroj)}</span>`],
     sort: (a, b) => (a.stav === 'hotovo') - (b.stav === 'hotovo') || String(a.termin || '9999').localeCompare(String(b.termin || '9999')),
     doneIf: x => x.stav === 'hotovo'
   },
@@ -186,7 +248,7 @@ const SCHEMAS = {
       { k: 'sliby', l: 'Otevřené sliby a body', t: 'textarea', wide: 1 }
     ],
     titleOf: x => x.jmeno + (x.organizace ? ` · ${x.organizace}` : ''),
-    meta: x => [x.oblast && tag(x.oblast, 'acc'), x.followup && dueTag(x.followup, false, 'follow-up'), x.posledni_kontakt && `<span class="muted">naposledy ${fmtDate(x.posledni_kontakt)}</span>`, x.email && `<span class="muted">${esc(x.email)}</span>`],
+    meta: x => [x.oblast && areaTag(x.oblast), x.followup && dueTag(x.followup, false, 'follow-up'), x.posledni_kontakt && `<span class="muted">naposledy ${fmtDate(x.posledni_kontakt)}</span>`, x.email && `<span class="muted">${esc(x.email)}</span>`],
     sort: (a, b) => String(a.followup || '9999').localeCompare(String(b.followup || '9999')) || String(a.jmeno).localeCompare(String(b.jmeno), 'cs')
   },
   faktury: {
@@ -204,7 +266,7 @@ const SCHEMAS = {
       { k: 'poznamka', l: 'Poznámka', t: 'textarea', wide: 1 }
     ],
     titleOf: x => `${x.smer === 'přijatá' ? 'Přijatá' : 'Vystavená'}${x.cislo ? ' ' + x.cislo : ''} · ${x.protistrana || ''}`,
-    meta: x => [x.castka && `<b>${Number(x.castka).toLocaleString('cs-CZ')} ${esc(x.mena || '')}</b>`, x.oblast && tag(x.oblast, 'acc'), x.splatnost && dueTag(x.splatnost, x.stav !== 'nezaplaceno', 'splatnost')],
+    meta: x => [x.castka && `<b>${Number(x.castka).toLocaleString('cs-CZ')} ${esc(x.mena || '')}</b>`, x.oblast && areaTag(x.oblast), x.splatnost && dueTag(x.splatnost, x.stav !== 'nezaplaceno', 'splatnost')],
     sort: (a, b) => (a.stav !== 'nezaplaceno') - (b.stav !== 'nezaplaceno') || String(a.splatnost || '9999').localeCompare(String(b.splatnost || '9999')),
     doneIf: x => x.stav !== 'nezaplaceno'
   },
@@ -218,7 +280,7 @@ const SCHEMAS = {
       { k: 'text', l: 'Zápis', t: 'textarea', wide: 1 },
       { k: 'ukoly', l: 'Vytažené úkoly', t: 'textarea', wide: 1 }
     ],
-    meta: x => [x.datum && `<span class="muted">${fmtDate(x.datum)}</span>`, x.oblast && tag(x.oblast, 'acc'), x.zdroj && tag(x.zdroj)],
+    meta: x => [x.datum && `<span class="muted">${fmtDate(x.datum)}</span>`, x.oblast && areaTag(x.oblast), x.zdroj && tag(x.zdroj)],
     body: x => x.text ? `<div class="muted" style="margin-top:6px;white-space:pre-wrap">${esc(String(x.text).slice(0, 280))}${String(x.text).length > 280 ? '…' : ''}</div>` : '',
     sort: (a, b) => String(b.datum || '').localeCompare(String(a.datum || ''))
   },
@@ -234,7 +296,7 @@ const SCHEMAS = {
       { k: 'stav', l: 'Stav', t: 'select', o: ['Aktivní', 'Vypnuto', 'Čeká na schválení', 'Plánováno'], def: 'Plánováno', quick: 1, filter: 1 },
       { k: 'poznamka', l: 'Poznámka', t: 'textarea', wide: 1 }
     ],
-    meta: x => [x.oblast && tag(x.oblast, 'acc'), x.typ && tag(x.typ), x.rezim && `<span class="muted">${esc(x.rezim)}</span>`, x.adresa && `<span class="muted">${esc(x.adresa)}</span>`],
+    meta: x => [x.oblast && areaTag(x.oblast), x.typ && tag(x.typ), x.rezim && `<span class="muted">${esc(x.rezim)}</span>`, x.adresa && `<span class="muted">${esc(x.adresa)}</span>`],
     body: x => x.poznamka ? `<div class="muted" style="margin-top:4px">${esc(x.poznamka)}</div>` : '',
     sort: (a, b) => ['Aktivní', 'Čeká na schválení', 'Plánováno', 'Vypnuto'].indexOf(a.stav) - ['Aktivní', 'Čeká na schválení', 'Plánováno', 'Vypnuto'].indexOf(b.stav)
   },
@@ -321,9 +383,9 @@ function renderDnes() {
   const fakt = (store.faktury || []).filter(x => x.stav === 'nezaplaceno' && x.splatnost && x.splatnost <= t);
   const zdrojeProblem = (store.zdroje || []).filter(x => x.stav === 'Aktivní' && /chyba|nefunguje/i.test(x.poznamka || ''));
   const list = (arr, fn) => arr.length ? arr.map(fn).join('') : '';
-  const taskCard = x => `<div class="card"><div class="row"><span class="grow title">${esc(x.nazev)}</span>${x.oblast ? tag(x.oblast, 'acc') : ''}${dueTag(x.termin)}<button class="btn sm" data-act="done" data-id="${esc(x.id)}">Hotovo</button></div></div>`;
+  const taskCard = x => `<div class="card area-card ${areaInfo(x.oblast).cls}"><div class="row"><span class="grow title">${esc(x.nazev)}</span>${x.oblast ? areaTag(x.oblast) : ''}${dueTag(x.termin)}<button class="btn sm" data-act="done" data-id="${esc(x.id)}">Hotovo</button></div></div>`;
   return `<h2>${new Date().toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
-  <div class="stats">
+  <p class="overview-intro">Vše podstatné z tvých čtyř oblastí na jednom místě.</p>\n  ${areaOverview()}\n  <div class="stats">
     <div class="stat" data-go="ukoly"><span class="muted">Po termínu</span><b style="color:${late.length ? 'var(--bad)' : 'inherit'}">${late.length}</b></div>
     <div class="stat" data-go="ukoly"><span class="muted">Na dnes</span><b>${now.length}</b></div>
     <div class="stat" data-go="schvaleni"><span class="muted">Ke schválení</span><b>${koncepty.length}</b></div>
@@ -331,7 +393,9 @@ function renderDnes() {
     <div class="stat" data-go="faktury"><span class="muted">Faktury k řešení</span><b>${fakt.length}</b></div>
   </div>
   ${zdrojeProblem.length ? `<div class="card" style="border-color:var(--warn)"><b>Pozor na zdroje:</b> ${zdrojeProblem.map(z => esc(z.nazev)).join(', ')}</div>` : ''}
-  <h3>Ranní report</h3>
+  <div class="group-heading"><h3>Otevřené úkoly podle oblastí</h3><button class="btn sm" data-go="ukoly">Všechny úkoly →</button></div>
+  ${groupedTasks(ukoly.slice().sort(SCHEMAS.ukoly.sort), x => '<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="row"><span class="grow title">'+esc(x.nazev)+'</span></div><div class="row task-meta">'+(x.termin?dueTag(x.termin):'<span class="muted">Bez termínu</span>')+(x.priorita==='vysoká'?tag('Vysoká priorita','bad'):'')+'<span class="grow"></span><button class="btn sm" data-act="done" data-id="'+esc(x.id)+'">Hotovo</button></div></div>')}
+  <h3>Report asistenta</h3>
   <div class="card md">${store.report ? mdToHtml(store.report) : '<span class="muted">Asistent zatím report nevytvořil. Objeví se tu po prvním ranním běhu.</span>'}</div>
   ${late.length ? '<h3>Po termínu</h3>' + list(late, taskCard) : ''}
   ${now.length ? '<h3>Na dnes</h3>' + list(now, taskCard) : ''}
@@ -349,7 +413,7 @@ function renderSchvaleni() {
   <p class="muted">Koncepty e-mailů od asistenta. Upravený text se uloží jako příklad vašeho stylu. Odesíláte vždy sami z původní schránky.</p>
   <div class="toolbar"><button class="btn ${view === 'ceka' ? 'pri' : ''}" data-cview="ceka">Čeká (${all.filter(c => c.stav === 'navrh').length})</button><button class="btn ${view === 'hotovo' ? 'pri' : ''}" data-cview="hotovo">Vyřízené</button></div>
   ${items.length ? items.map(c => `<div class="card" data-cid="${esc(c.id)}">
-    <div class="row"><span class="grow title">${esc(c.predmet || '(bez předmětu)')}</span>${c.oblast ? tag(c.oblast, 'acc') : ''}${tag(...(lbl[c.stav] || [c.stav]))}</div>
+    <div class="row"><span class="grow title">${esc(c.predmet || '(bez předmětu)')}</span>${c.oblast ? areaTag(c.oblast) : ''}${tag(...(lbl[c.stav] || [c.stav]))}</div>
     <div class="muted">Komu: ${esc(c.komu || '')}${c.odeslat_z ? ' · odeslat z: ' + esc(c.odeslat_z) : ''}${c.vytvoreno ? ' · ' + fmtDate(c.vytvoreno) : ''}</div>
     ${c.kontext ? `<div class="muted" style="margin-top:4px">Kontext: ${esc(c.kontext)}</div>` : ''}
     ${c.stav === 'navrh' ? `<textarea data-ctext style="min-height:160px;margin-top:8px">${esc(c.text)}</textarea>
@@ -386,15 +450,15 @@ function renderCollection(key) {
     const meta = (S.meta ? S.meta(x) : []).filter(Boolean).join(' ');
     const quick = S.fields.filter(fd => fd.quick).map(fd => `<select class="inline" data-quick="${fd.k}" data-id="${esc(x.id)}" title="${esc(fd.l)}">${fd.o.map(o => `<option ${x[fd.k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).join('');
     const title = S.titleOf ? S.titleOf(x) : x[S.fields[0].k];
-    return `<div class="card ${S.doneIf && S.doneIf(x) ? 'done' : ''}"><div class="row"><span class="grow title">${esc(title)}</span>${quick}<button class="btn sm" data-act="edit" data-id="${esc(x.id)}">Upravit</button></div>
-      ${meta ? `<div class="row" style="margin-top:4px">${meta}</div>` : ''}${S.body ? S.body(x) : ''}</div>`;
+    return `<div class="card area-card ${areaInfo(x.oblast).cls} ${S.doneIf && S.doneIf(x) ? 'done' : ''}"><div class="row"><span class="grow title">${esc(title)}</span>${quick}<button class="btn sm" data-act="edit" data-id="${esc(x.id)}">Upravit</button></div>
+      ${meta ? `<div class="row task-meta">${meta}</div>` : ''}${key === 'ukoly' && x.poznamka ? `<div class="task-note">${esc(x.poznamka)}</div>` : ''}${S.body ? S.body(x) : ''}</div>`;
   };
-  return `<h2>${esc(S.title)} <span class="muted">(${items.length})</span></h2>${S.intro ? `<p class="muted">${esc(S.intro)}</p>` : ''}${toolbar}
+  return `<h2>${esc(S.title)} <span class="muted">(${items.length})</span></h2>${S.intro ? `<p class="muted">${esc(S.intro)}</p>` : ''}${key === 'ukoly' ? areaOverview() : ''}${S.fields.some(fd=>fd.k==='oblast') ? areaFilters(key) : ''}${toolbar}
     ${ui.adding ? formHtml(key, null) : ''}
-    ${shown.length ? shown.map(card).join('') : `<div class="empty">${items.length ? 'Nic neodpovídá filtru.' : 'Zatím prázdné.'}</div>`}`;
+    ${shown.length ? (key === 'ukoly' && !f.oblast ? groupedTasks(shown,card) : shown.map(card).join('')) : `<div class="empty">${items.length ? 'Nic neodpovídá filtru.' : 'Zatím prázdné.'}</div>`}`;
 }
 function formHtml(key, x) {
-  const S = SCHEMAS[key]; const v = x || {};
+  const S = SCHEMAS[key]; const v = x || (key === 'ukoly' ? {oblast:(ui.filters.ukoly||{}).oblast || ''} : {});
   const input = fd => {
     const val = v[fd.k] != null ? v[fd.k] : (x ? '' : (typeof fd.def === 'function' ? fd.def() : (fd.def || '')));
     const name = `data-f="${fd.k}"`;
@@ -451,6 +515,8 @@ function collectUceni() {
 /* ---------- události ---------- */
 $('#main').addEventListener('click', async e => {
   const t = e.target.closest('button,[data-go]'); if (!t) return;
+  if (t.dataset.openArea != null) { tab='ukoly'; ui.filters.ukoly=Object.assign({},ui.filters.ukoly,{oblast:t.dataset.openArea}); ui.editing=null; ui.adding=false; render(); window.scrollTo(0,0); return; }
+  if (t.dataset.areaFilter != null) { (ui.filters[tab]=ui.filters[tab]||{}).oblast=t.dataset.areaFilter; ui.editing=null; ui.adding=false; render(); return; }
   if (t.dataset.go) { tab = t.dataset.go; render(); return; }
   if (t.dataset.cview) { ui.conceptView = t.dataset.cview; render(); return; }
   if (t.dataset.cact) { const card = t.closest('[data-cid]'); return conceptAction(card.dataset.cid, t.dataset.cact, card); }
