@@ -117,7 +117,7 @@ function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
 const FILES = {
   zdroje: 'zdroje.json', pravidla: 'pravidla.json', ukoly: 'ukoly.json', kontakty: 'kontakty.json',
   faktury: 'faktury.json', koncepty: 'koncepty.json', zapisy: 'zapisy.json', zpetna: 'zpetna-vazba.json',
-  report: 'reporty/dnes.md', plandata: 'planovani.json', vecer: 'reporty/vecer.md', tyden: 'reporty/tyden.md', anotace: 'anotace.json'
+  report: 'reporty/dnes.md', plandata: 'planovani.json', vecer: 'reporty/vecer.md', tyden: 'reporty/tyden.md', anotace: 'anotace.json', zpracovani: 'zpracovani.json'
 };
 const store = {}, shas = {};
 
@@ -194,7 +194,7 @@ const AREAS = [
   {key:'CometX',label:'CometX',desc:'Komunita, spolek a SCAS',cls:'area-cometx'},
   {key:'Osobní',label:'Osobní',desc:'Dům, rodina a osobní schůzky',cls:'area-personal'},
   {key:'LOC',label:'Lab On Card',desc:'Práce, partneři a projekty',cls:'area-loc'},
-  {key:'Konzultace',label:'Konzultace',desc:'Vedlejší obživa a klienti',cls:'area-consult'}
+  {key:'Konzultace',label:'Konzultace',desc:'Klienti, mentoring a vedlejší obživa',cls:'area-consult'}
 ];
 function areaInfo(key) { return AREAS.find(a => a.key === key) || {key:key || '', label:key || 'Bez oblasti', cls:'area-other',desc:''}; }
 function areaTag(key) { const a=areaInfo(key); return '<span class="tag area-tag '+a.cls+'"><span class="area-dot" aria-hidden="true"></span>'+esc(a.label)+'</span>'; }
@@ -491,7 +491,7 @@ function formHtml(key, x) {
     </div><div class="row" style="margin-top:12px"><button class="btn pri" data-act="save">Uložit</button><button class="btn" data-act="cancel">Zrušit</button>${x ? '<span class="grow"></span><button class="btn bad" data-act="delete">Smazat</button>' : ''}</div></div>`;
 }
 async function saveForm(key, formEl) {
-  const S = SCHEMAS[key]; const id = formEl.dataset.form; const data = {};
+  const S = SCHEMAS[key]; const id = formEl.dataset.form; const data = {}; const oldContext=(store[key]||[]).find(x=>x.id===id)?.kontext_adama||'';
   formEl.querySelectorAll('[data-f]').forEach(el => { const fd = S.fields.find(f => f.k === el.dataset.f); data[el.dataset.f] = fd && fd.t === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value.trim(); });
   if (key==='ukoly' && data.odhad_min!=='' && (!Number.isFinite(data.odhad_min) || data.odhad_min<5 || data.odhad_min>480)) { toast('Odhad délky musí být 5 až 480 minut.'); return; }
   const missing = S.fields.filter(fd => fd.req && !data[fd.k]);
@@ -499,7 +499,7 @@ async function saveForm(key, formEl) {
   store[key] = store[key] || [];
   if (id === '__new') store[key].push(Object.assign({ id: uid(), vytvoreno: today(), zdroj_zapisu: 'panel' }, data));
   else Object.assign(store[key].find(x => x.id === id), data, { upraveno: today() });
-  if (key==='ukoly') { const item=store[key].find(x=>x.id===id)||store[key][store[key].length-1]; if(data.kontext_adama!==undefined) item.kontext_upraveno=new Date().toISOString(); }
+  if (key==='ukoly') { const item=store[key].find(x=>x.id===id)||store[key][store[key].length-1]; if(data.kontext_adama!==undefined && data.kontext_adama!==oldContext) item.kontext_upraveno=new Date().toISOString(); }
   if (key==='ukoly' && data.stav==='hotovo') { const item=store[key].find(x=>x.id===id) || store[key][store[key].length-1]; if(!item.hotovo) item.hotovo=today(); }
   if (await saveFile(key, `Panel: ${id === '__new' ? 'nový záznam' : 'úprava'} – ${S.title}`)) { ui.editing = null; ui.adding = false; render(); toast('Uloženo'); }
 }
@@ -581,7 +581,7 @@ $('#main').addEventListener('input', e => {
 /* ---------- Plánování času ---------- */
 const planUI={date:today(),duration:30};
 function taskDetails(x) {
-  return (x.kontext_adama ? '<div class="card" style="margin-top:10px;background:var(--surface-2)"><b>Moje upřesnění</b><div class="task-note">'+esc(x.kontext_adama)+'</div></div>':'') + (x.dalsi_krok ? '<div class="task-note"><b>Další krok:</b> '+esc(x.dalsi_krok)+'</div>':'')
+  return (x.kontext_adama ? processingBadge('ukol',x)+'<div class="card" style="margin-top:10px;background:var(--surface-2)"><b>Moje upřesnění</b><div class="task-note">'+esc(x.kontext_adama)+'</div></div>':'') + (x.dalsi_krok ? '<div class="task-note"><b>Další krok:</b> '+esc(x.dalsi_krok)+'</div>':'')
     +(x.kroky ? '<details class="task-note"><summary>Kroky projektu</summary><p style="white-space:pre-wrap">'+esc(x.kroky)+'</p></details>':'')
     +(x.cekam_na ? '<div class="task-note">Čekám na: '+esc(x.cekam_na)+'</div>':'')
     +(x.slib_komu ? '<div class="task-note">Slíbeno: '+esc(x.slib_komu)+'</div>':'')
@@ -638,6 +638,7 @@ function renderPlan() {
   const suggestions=freeWindows(date).flatMap(w=>{let a=[];for(let t=w[0];t+duration*60000<=w[1]&&a.length<3;t+=Math.max(30,duration+Number(c.rezerva_min))*60000)a.push([t,t+duration*60000]);return a;}).slice(0,3);
   const open=all.filter(x=>x.stav!=='hotovo');
   return '<h2>Plán a kapacita</h2><p class="overview-intro">Tři priority, čas na soustředění a prostor pro nečekané věci.</p>'
+  +renderProcessingLog()
   +'<div class="card" style="margin-top:18px"><div class="form"><div><label for="planDate">Den</label><input id="planDate" type="date" value="'+esc(date)+'"></div><div><label for="dayStart">Začátek dne</label><input id="dayStart" type="time" value="'+esc(c.zacatek)+'"></div><div><label for="dayEnd">Konec dne</label><input id="dayEnd" type="time" value="'+esc(c.konec)+'"></div><div><label for="bufferMin">Rezerva kolem schůzek (min)</label><input id="bufferMin" type="number" min="0" max="120" value="'+esc(c.rezerva_min)+'"></div><div><label for="capacityPct">Kolik volného času plánovat (%)</label><input id="capacityPct" type="number" min="10" max="100" value="'+esc(c.kapacita_procent)+'"></div></div><button class="btn" style="margin-top:12px" data-plan-act="settings">Uložit kapacitu</button><p class="muted">Výchozí návrh je 9–17, 15 minut na přípravu/přesun a 30 % volné kapacity jako rezerva. Uprav podle svého dne.</p></div>'
   +(issue?'<div class="card"><b>'+esc(issue)+'</b></div>':'')
   +'<p class="muted">Kalendáře aktualizované: '+esc(store.plandata?.aktualizovano?new Date(store.plandata.aktualizovano).toLocaleString('cs-CZ',{timeZone:'Europe/Prague'}):'zatím ne')+'. Návrhy platí pro načtené aktivní kalendáře; dostupnost ostatních lidí není ověřená.</p>'
@@ -761,7 +762,8 @@ function manualEvents(date) {
  return out;
 }
 function agendaEvents(date) {
- return (store.plandata?.udalosti||[]).map(e=>{
+ return (store.plandata?.udalosti||[]).map(original=>{
+  const e={...original,oblast:/mentor/i.test(original.title||'')?'Konzultace':original.oblast};
   const a=annotationFor(eventKey(e));
   return a?{...e,title:a.nazev||e.title,oblast:a.oblast||e.oblast,annotation:a}:e;
  }).concat(manualEvents(date));
@@ -770,7 +772,7 @@ function annotationControls(x) {
  if(x.kind!=='event'&&x.kind!=='busy')return '';
  const key=x.kind==='busy'?busyKey(x.busy):x.event.series_id?'occurrence:'+x.event.series_id+':'+x.event.occurrence_date:x.event.source==='rucni-agenda'?x.event.id:eventKey(x.event);
  const a=x.kind==='busy'?annotationFor(key):x.event.annotation;
- return (a?.kontext?'<div class="task-note"><b>Moje upřesnění:</b><br>'+esc(a.kontext)+'</div>':'')
+ return (a?.kontext?processingBadge('anotace',a)+'<div class="task-note"><b>Moje upřesnění:</b><br>'+esc(a.kontext)+'</div>':'')
  +'<div class="calendar-task-actions"><button class="btn sm" data-ann-edit="'+esc(key)+'">'+(a?'Upravit moje upřesnění':'Doplnit poznámku / upřesnit')+'</button>'+(a?'<button class="btn sm" data-ann-task="'+esc(a.id)+'">Vytvořit navazující úkol</button>':'')+(x.event?.series_id?'<button class="btn sm" data-ann-edit="'+esc(x.event.series_id)+'">Upravit celou řadu</button>':'')+'</div>';
 }
 function renderAnnotationEditor() {
@@ -836,6 +838,26 @@ $('#main').addEventListener('click',async e=>{
   tab='ukoly';ui.filters.ukoly={};ui.q.ukoly='';ui.adding=false;ui.editing=id;render();
  }
 });
+
+
+/* ---------- Zapracování ručního kontextu ---------- */
+function inputRevision(type,x) {
+ return type==='ukol' ? (x.kontext_upraveno||'legacy:'+String(x.kontext_adama||'')) : (x.upraveno||x.vytvoreno||'legacy:'+String(x.kontext||''));
+}
+function processingEntry(type,x) {
+ return (store.zpracovani||[]).filter(r=>r.source_type===type&&r.source_id===x.id&&r.source_revision===inputRevision(type,x)).sort((a,b)=>String(b.zpracovano||'').localeCompare(String(a.zpracovano||'')))[0];
+}
+function processingBadge(type,x) {
+ if(x.autor==='asistent'&&x.zdroj_zapisu==='asistent')return '<div class="task-note">'+tag('Odvozeno z tvého upřesnění','acc')+'</div>';
+ const r=processingEntry(type,x),state=r?.stav||'ceka';
+ const labels={ceka:'Čeká na zapracování',zapracovano:'Zapracováno',potrebuje_upresneni:'Potřebuji upřesnění',ceka_na_potvrzeni:'Změna Google Kalendáře čeká na potvrzení',chyba:'Chyba zpracování'};
+ return '<div class="task-note">'+tag(labels[state]||state,state==='zapracovano'?'good':state==='chyba'?'bad':'warn')+(r?.souhrn?'<p>'+esc(r.souhrn)+'</p>':'')+(r?.otazky?.length?'<p><b>K doplnění:</b> '+esc(r.otazky.join(' '))+'</p>':'')+'</div>';
+}
+function renderProcessingLog() {
+ const sources=[...(store.anotace||[]).filter(x=>x.kontext?.trim()&&x.autor!=='asistent').map(x=>({type:'anotace',x})),...(store.ukoly||[]).filter(x=>x.kontext_adama?.trim()).map(x=>({type:'ukol',x}))];
+ return '<details class="card" style="margin-top:18px"><summary><b>Zapracování mých upřesnění</b></summary><p class="muted">Kontrola každou hodinu a při dalších bězích asistenta. Stav načteš obnovením panelu. Původní události Google se mění až po samostatném potvrzení.</p>'
+ +(sources.length?sources.map(({type,x})=>{const r=processingEntry(type,x);return '<div style="border-top:1px solid var(--border);padding:12px 0"><b>'+esc(x.nazev||'Upřesnění')+'</b>'+processingBadge(type,x)+(r?.zmeny?.length?'<ul>'+r.zmeny.map(v=>'<li>'+esc(typeof v==='string'?v:JSON.stringify(v))+'</li>').join('')+'</ul>':'')+(r?.navrhy_google?.length?'<p class="muted"><b>Návrhy pro Google Kalendář:</b> '+esc(r.navrhy_google.map(v=>typeof v==='string'?v:JSON.stringify(v)).join('; '))+'. Potvrď konkrétní změnu v chatu.</p>':'')+'</div>';}).join(''):'<p class="muted">Ulož upřesnění u úkolu nebo události.</p>')+'</details>';
+}
 
 /* ---------- start ---------- */
 (async () => {
