@@ -244,7 +244,7 @@ const SCHEMAS = {
       { k: 'slib_komu', l: 'Komu jsem slíbil výsledek', t: 'text' },
       { k: 'pripomenout', l: 'Připomenout / follow-up', t: 'date' },
       { k: 'plan_datum', l: 'Plánovaný den (nemění termín)', t: 'date' },
-      { k: 'kontext_adama', l: 'Moje upřesnění pro asistenta', t: 'textarea', wide: 1, ph: 'Co se opravdu děje, co je hotové, co potřebuji a na co čekám…' },
+      { k: 'kontext_adama', l: 'Moje poznámka pro asistenta', t: 'textarea', wide: 1, ph: 'Co se opravdu děje, co je hotové, co potřebuji a na co čekám…' },
       { k: 'poznamka', l: 'Poznámka', t: 'textarea', wide: 1 }
     ],
     meta: x => [x.odhad_min && tag(x.odhad_min + ' min · ' + (x.odhad_typ || 'odhad')), x.projekt && tag(x.projekt), x.oblast && areaTag(x.oblast), x.termin && dueTag(x.termin, x.stav === 'hotovo'), x.priorita === 'vysoká' && tag('vysoká priorita', 'bad'), x.zdroj && `<span class="muted">${esc(x.zdroj)}</span>`],
@@ -413,7 +413,7 @@ function renderDnes() {
   </div>
   ${zdrojeProblem.length ? `<div class="card" style="border-color:var(--warn)"><b>Pozor na zdroje:</b> ${zdrojeProblem.map(z => esc(z.nazev)).join(', ')}</div>` : ''}
   <div class="group-heading"><h3>Otevřené úkoly podle oblastí</h3><button class="btn sm" data-go="ukoly">Všechny úkoly →</button></div>
-  ${groupedTasks(ukoly.slice().sort(SCHEMAS.ukoly.sort), x => '<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="row"><span class="grow title">'+esc(x.nazev)+'</span></div><div class="row task-meta">'+(x.termin?dueTag(x.termin):'<span class="muted">Bez termínu</span>')+(x.priorita==='vysoká'?tag('Vysoká priorita','bad'):'')+'<span class="grow"></span><button class="btn sm" data-act="done" data-id="'+esc(x.id)+'">Hotovo</button></div></div>')}
+  ${groupedTasks(ukoly.slice().sort(SCHEMAS.ukoly.sort), x => '<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="row"><span class="grow title">'+esc(x.nazev)+'</span></div><div class="row task-meta">'+(x.termin?dueTag(x.termin):'<span class="muted">Bez termínu</span>')+(x.priorita==='vysoká'?tag('Vysoká priorita','bad'):'')+'<span class="grow"></span><button class="btn sm" data-act="done" data-id="'+esc(x.id)+'">Hotovo</button></div>'+taskNoteEditor(x)+'</div>')}
   <div class="card"><div class="row"><b class="grow">Co se dnes opravdu vejde?</b><button class="btn pri" data-go="plan">Plán, termíny a uzavření dne →</button></div></div>
   <h3>Report asistenta</h3>
   <div class="card md">${store.report ? mdToHtml(store.report) : '<span class="muted">Asistent zatím report nevytvořil. Objeví se tu po prvním ranním běhu.</span>'}</div>
@@ -581,7 +581,7 @@ $('#main').addEventListener('input', e => {
 /* ---------- Plánování času ---------- */
 const planUI={date:today(),duration:30};
 function taskDetails(x) {
-  return (x.kontext_adama ? processingBadge('ukol',x)+'<div class="card" style="margin-top:10px;background:var(--surface-2)"><b>Moje upřesnění</b><div class="task-note">'+esc(x.kontext_adama)+'</div></div>':'') + (x.dalsi_krok ? '<div class="task-note"><b>Další krok:</b> '+esc(x.dalsi_krok)+'</div>':'')
+  return taskNoteEditor(x) + (x.kontext_adama ? processingBadge('ukol',x)+'<div class="card" style="margin-top:10px;background:var(--surface-2)"><b>Moje upřesnění</b><div class="task-note">'+esc(x.kontext_adama)+'</div></div>':'') + (x.dalsi_krok ? '<div class="task-note"><b>Další krok:</b> '+esc(x.dalsi_krok)+'</div>':'')
     +(x.kroky ? '<details class="task-note"><summary>Kroky projektu</summary><p style="white-space:pre-wrap">'+esc(x.kroky)+'</p></details>':'')
     +(x.cekam_na ? '<div class="task-note">Čekám na: '+esc(x.cekam_na)+'</div>':'')
     +(x.slib_komu ? '<div class="task-note">Slíbeno: '+esc(x.slib_komu)+'</div>':'')
@@ -718,7 +718,7 @@ function renderCalendar() {
  +'<button class="btn pri" data-cal-plan="'+calUI.date+'">Naplánovat tento den →</button>'
  +'<div class="calendar-task-actions"><button class="btn" data-cal-new="'+calUI.date+'">+ Úkol</button><button class="btn" data-ann-new="'+calUI.date+'">+ Vlastní událost / LOC</button></div>'+renderAnnotationEditor()
  +(selected.length?selected.map(x=>'<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="agenda-time">'+esc(x.label)+'</div><b>'+esc(x.title)+'</b>'
- +(x.kind==='contact'?'<div class="calendar-task-actions"><button class="btn sm" data-go-contact="'+esc(x.id)+'">Otevřít kontakt</button></div>':x.kind==='task'?'<div class="calendar-task-actions"><button class="btn sm" data-go-task="'+esc(x.id)+'">Otevřít úkol</button><button class="btn sm good" data-plan-done="'+esc(x.id)+'">Hotovo</button></div>':x.kind==='event'?'<p class="task-note">'+esc((store.plandata?.pripravy||[]).find(p=>p.event_id===x.id)?.body||x.event.description||'Bez dalších podkladů.')+'</p>':'')+annotationControls(x)+'</div>').join(''):'<div class="empty" style="margin-top:10px">Pro tento den nejsou uložené položky.</div>')
+ +(x.kind==='contact'?'<div class="calendar-task-actions"><button class="btn sm" data-go-contact="'+esc(x.id)+'">Otevřít kontakt</button></div>':x.kind==='task'?'<div class="calendar-task-actions"><button class="btn sm" data-go-task="'+esc(x.id)+'">Otevřít úkol</button><button class="btn sm good" data-plan-done="'+esc(x.id)+'">Hotovo</button></div>'+taskNoteEditor(x.task):x.kind==='event'?'<p class="task-note">'+esc((store.plandata?.pripravy||[]).find(p=>p.event_id===x.id)?.body||x.event.description||'Bez dalších podkladů.')+'</p>':'')+annotationControls(x)+'</div>').join(''):'<div class="empty" style="margin-top:10px">Pro tento den nejsou uložené položky.</div>')
  +'</aside></div><h3>Úkoly bez termínu a bez plánovaného dne</h3><p class="muted">Vyber den v kalendáři a přiřaď mu úkol. Skutečný termín zůstane prázdný.</p>'
  +(undated.length?undated.map(x=>'<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="row"><span class="grow">'+esc(x.nazev)+'</span><button class="btn sm" data-go-task="'+esc(x.id)+'">Upravit</button><button class="btn sm" data-cal-assign="'+esc(x.id)+'">Plánovat '+fmtDate(calUI.date)+'</button></div></div>').join(''):'<div class="empty">Žádné nezařazené úkoly.</div>');
 }
@@ -858,6 +858,31 @@ function renderProcessingLog() {
  return '<details class="card" style="margin-top:18px"><summary><b>Zapracování mých upřesnění</b></summary><p class="muted">Kontrola každou hodinu a při dalších bězích asistenta. Stav načteš obnovením panelu. Původní události Google se mění až po samostatném potvrzení.</p>'
  +(sources.length?sources.map(({type,x})=>{const r=processingEntry(type,x);return '<div style="border-top:1px solid var(--border);padding:12px 0"><b>'+esc(x.nazev||'Upřesnění')+'</b>'+processingBadge(type,x)+(r?.zmeny?.length?'<ul>'+r.zmeny.map(v=>'<li>'+esc(typeof v==='string'?v:JSON.stringify(v))+'</li>').join('')+'</ul>':'')+(r?.navrhy_google?.length?'<p class="muted"><b>Návrhy pro Google Kalendář:</b> '+esc(r.navrhy_google.map(v=>typeof v==='string'?v:JSON.stringify(v)).join('; '))+'. Potvrď konkrétní změnu v chatu.</p>':'')+'</div>';}).join(''):'<p class="muted">Ulož upřesnění u úkolu nebo události.</p>')+'</details>';
 }
+
+
+/* ---------- Rychlé poznámky k úkolům ---------- */
+const taskNoteUI={editing:null};
+function taskNoteEditor(x) {
+ if(!x)return '';
+ if(taskNoteUI.editing!==x.id)return '<div class="calendar-task-actions"><button class="btn sm" data-task-note="'+esc(x.id)+'">'+(x.kontext_adama?'Doplnit / upravit moji poznámku':'+ Poznámka pro asistenta')+'</button></div>';
+ return '<div class="card" data-task-note-box style="margin-top:12px;background:var(--surface-2)"><label>Moje poznámka pro asistenta<textarea data-task-note-text style="margin-top:6px;min-height:110px" placeholder="Např. schůzka proběhla, čekám na podklady od Petra…">'+esc(x.kontext_adama||'')+'</textarea></label><p class="muted">Po uložení asistent při nejbližší hodinové kontrole zapracuje změny do souvisejících úkolů, zápisů a vlastního plánu. Pro okamžité zpracování napiš do chatu „zapracuj moje poslední upřesnění“.</p><div class="calendar-task-actions"><button class="btn pri" data-task-note-save="'+esc(x.id)+'">Uložit a předat asistentovi</button><button class="btn" data-task-note-cancel>Zrušit</button></div>'+processingBadge('ukol',x)+'</div>';
+}
+$('#main').addEventListener('click',async e=>{
+ const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.taskNote){taskNoteUI.editing=b.dataset.taskNote;render();return;}
+ if(b.hasAttribute('data-task-note-cancel')){taskNoteUI.editing=null;render();return;}
+ if(b.dataset.taskNoteSave){
+  const x=(store.ukoly||[]).find(x=>x.id===b.dataset.taskNoteSave);if(!x)return;
+  const value=b.closest('[data-task-note-box]').querySelector('[data-task-note-text]').value.trim();
+  if(value===(x.kontext_adama||'')){taskNoteUI.editing=null;render();return;}
+  if(x.kontext_adama){x.historie_upresneni=x.historie_upresneni||[];x.historie_upresneni.push({text:x.kontext_adama,revize:x.kontext_upraveno||null,nahrazeno:new Date().toISOString()});}
+  x.kontext_adama=value;x.kontext_upraveno=new Date().toISOString();x.upraveno=today();
+  b.disabled=true;
+  try{if(await saveFile('ukoly','Panel: poznámka k úkolu pro automatické zapracování')){taskNoteUI.editing=null;render();toast('Poznámka uložená · čeká na zapracování');}}
+  catch(err){toast('Poznámku se nepodařilo uložit. Zkus to znovu.');}
+  finally{b.disabled=false;}
+ }
+});
 
 /* ---------- start ---------- */
 (async () => {
