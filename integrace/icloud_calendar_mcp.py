@@ -17,13 +17,14 @@ from __future__ import annotations
 
 import asyncio
 import os
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from urllib.parse import unquote, urlparse
 
-from icloud_mcp import writes as write_ops
+import icalendar
 from icloud_mcp.clients import CalendarClient
 from icloud_mcp.config import Settings
 from icloud_mcp.models import Event
@@ -121,6 +122,114 @@ def _calendar_policy() -> tuple[set[str], set[str]]:
             "ICLOUD_ALLOWED_CALENDAR_IDS."
         )
     return allowed, busy_only
+
+
+def _write_policy() -> set[str]:
+    allowed, busy_only = _calendar_policy()
+    writable = {
+        value.strip()
+        for value in os.getenv("ICLOUD_WRITE_CALENDAR_IDS", "").split(",")
+        if value.strip()
+    }
+    if not writable:
+        raise RuntimeError(
+            "ICLOUD_WRITE_CALENDAR_IDS is empty. Configure an explicit writable "
+            "calendar identifier before enabling writes."
+        )
+    forbidden = writable - (allowed - busy_only)
+    if forbidden:
+        raise RuntimeError(
+            "Writable calendar identifiers must be allowed and cannot be busy-only."
+        )
+    return writable
+
+
+def _calendar_by_id(calendar: CalendarClient, calendar_id: str):
+    for item in calendar.principal().calendars():
+        raw_url = str(getattr(item, "url", ""))
+        if _calendar_identifier(raw_url) == calendar_id:
+            return item
+    raise RuntimeError(f"iCloud calendar {calendar_id} was not found.")
+
+
+def _ical_value(value: str):
+    return date.fromisoformat(value) if len(value) == 10 else datetime.fromisoformat(value)
+
+
+def _create_event_in_calendar(
+    calendar: CalendarClient,
+    calendar_id: str,
+    title: str,
+    start: str,
+    end: str,
+    location: str,
+) -> str:
+    target = _calendar_by_id(calendar, calendar_id)
+    document = icalendar.Calendar()
+    document.add("version", "2.0")
+    document.add("prodid", "-//M.A.R.V.I.N.//iCloud Calendar//CS")
+    event = icalendar.Event()
+    event.add("uid", f"{uuid.uuid4()}@marvin")
+    event.add("dtstamp", datetime.now(timezone.utc))
+    event.add("dtstart", _ical_value(start))
+    event.add("dtend", _ical_value(end))
+    event.add("summary", title)
+    if location:
+        event.add("location", location)
+    document.add_component(event)
+    target.save_event(document.to_ical().decode())
+    return f"Created “{title}” on {target.get_display_name()}."
+
+
+def _find_event_in_calendar(calendar: CalendarClient, calendar_id: str, uid: str):
+    target = _calendar_by_id(calendar, calendar_id)
+    for event in target.events():
+        component = event.icalendar_component
+        if str(component.get("uid", "")) == uid:
+            return event
+    raise RuntimeError(f"Event {uid} was not found in calendar {calendar_id}.")
+
+
+def _update_event_in_calendar(
+    calendar: CalendarClient,
+    calendar_id: str,
+    uid: str,
+    title: str,
+    start: str,
+    end: str,
+    location: str,
+) -> str:
+    event = _find_event_in_calendar(calendar, calendar_id, uid)
+    document = icalendar.Calendar.from_ical(event.data)
+    component = next((item for item in document.walk() if item.name == "VEVENT"), None)
+    if component is None:
+        raise RuntimeError(f"Event {uid} has no VEVENT component.")
+
+    def replace(key: str, value) -> None:
+        if key in component:
+            del component[key]
+        component.add(key, value)
+
+    if title:
+        replace("summary", title)
+    if start:
+        replace("dtstart", _ical_value(start))
+    if end:
+        replace("dtend", _ical_value(end))
+    if location:
+        replace("location", location)
+    replace("dtstamp", datetime.now(timezone.utc))
+    event.data = document.to_ical().decode()
+    event.save()
+    return f"Updated event {uid}."
+
+
+def _delete_event_in_calendar(
+    calendar: CalendarClient, calendar_id: str, uid: str
+) -> str:
+    event = _find_event_in_calendar(calendar, calendar_id, uid)
+    event.delete()
+    return f"Deleted event {uid}."
 
 
 def _sort_key(value, tz):
@@ -281,33 +390,46 @@ async def create_event(
     title: str,
     start: str,
     end: str,
-    calendar: str,
+    calendar_id: str,
     location: str = "",
 ) -> str:
-    """Create an event in a named calendar after interactive confirmation."""
+    """Create an event in an explicitly writable calendar after confirmation."""
     app = _ctx(ctx)
-    if not calendar.strip():
-        raise ValueError("A verified calendar name is required.")
+    writable = _write_policy()
+    if calendar_id not in writable:
+        raise ValueError(f"Calendar {calendar_id} is not configured for writes.")
     if not await _confirmed(
-        ctx, app, f"Create iCloud event '{title}' in '{calendar}' from {start} to {end}?"
+        ctx,
+        app,
+        f"Create iCloud event '{title}' in calendar {calendar_id} from {start} to {end}?",
     ):
         return "Cancelled — event not created."
     return await _run_calendar(
-        app, write_ops.create_event, title, start, end, calendar, location
+        app,
+        _create_event_in_calendar,
+        calendar_id,
+        title,
+        start,
+        end,
+        location,
     )
 
 
 @mcp.tool()
 async def update_event(
     ctx: Context,
+    calendar_id: str,
     uid: str,
     title: str = "",
     start: str = "",
     end: str = "",
     location: str = "",
 ) -> str:
-    """Update one event by UID after interactive confirmation."""
+    """Update one event in an explicitly writable calendar after confirmation."""
     app = _ctx(ctx)
+    writable = _write_policy()
+    if calendar_id not in writable:
+        raise ValueError(f"Calendar {calendar_id} is not configured for writes.")
     changes = ", ".join(
         f"{key}={value}"
         for key, value in (
@@ -320,20 +442,36 @@ async def update_event(
     )
     if not changes:
         raise ValueError("At least one changed field is required.")
-    if not await _confirmed(ctx, app, f"Update iCloud event {uid}: {changes}?"):
+    if not await _confirmed(
+        ctx, app, f"Update iCloud event {uid} in calendar {calendar_id}: {changes}?"
+    ):
         return "Cancelled — event not updated."
     return await _run_calendar(
-        app, write_ops.update_event, uid, title, start, end, location
+        app,
+        _update_event_in_calendar,
+        calendar_id,
+        uid,
+        title,
+        start,
+        end,
+        location,
     )
 
 
 @mcp.tool()
-async def delete_event(ctx: Context, uid: str) -> str:
-    """Delete one event by UID after interactive confirmation."""
+async def delete_event(ctx: Context, calendar_id: str, uid: str) -> str:
+    """Delete one event in an explicitly writable calendar after confirmation."""
     app = _ctx(ctx)
-    if not await _confirmed(ctx, app, f"Permanently delete iCloud event {uid}?"):
+    writable = _write_policy()
+    if calendar_id not in writable:
+        raise ValueError(f"Calendar {calendar_id} is not configured for writes.")
+    if not await _confirmed(
+        ctx, app, f"Permanently delete iCloud event {uid} in calendar {calendar_id}?"
+    ):
         return "Cancelled — event not deleted."
-    return await _run_calendar(app, write_ops.delete_event, uid)
+    return await _run_calendar(
+        app, _delete_event_in_calendar, calendar_id, uid
+    )
 
 
 def main() -> None:
