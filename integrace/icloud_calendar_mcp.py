@@ -34,6 +34,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from pydantic import BaseModel
 
 
+SERVER_VERSION = "2026.10.21-v3"
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="marvin-icloud")
 _CALL_TIMEOUT = 90
 
@@ -56,13 +57,22 @@ class CalendarInfo(BaseModel):
     url: str
 
 
+class ServerInfo(BaseModel):
+    version: str
+    process_id: int
+    script_path: str
+    writes_enabled: bool
+    write_tools: list[str]
+    confirmation_parameter: str
+
+
 @asynccontextmanager
 async def lifespan(_server: FastMCP):
     settings = Settings.from_env()
     yield AppContext(settings=settings)
 
 
-mcp = FastMCP("marvin-icloud-calendar", lifespan=lifespan)
+mcp = FastMCP("marvin-icloud-calendar-v3", lifespan=lifespan)
 
 
 def _ctx(ctx: Context) -> AppContext:
@@ -351,6 +361,24 @@ async def list_calendars(ctx: Context) -> list[CalendarInfo]:
 
 
 @mcp.tool()
+async def server_info(ctx: Context) -> ServerInfo:
+    """Return the running wrapper version and write interface without secrets."""
+    app = _ctx(ctx)
+    return ServerInfo(
+        version=SERVER_VERSION,
+        process_id=os.getpid(),
+        script_path=os.path.realpath(__file__),
+        writes_enabled=app.settings.enable_writes,
+        write_tools=[
+            "create_event_confirmed",
+            "update_event_confirmed",
+            "delete_event_confirmed",
+        ],
+        confirmation_parameter='confirmation="CONFIRMED"',
+    )
+
+
+@mcp.tool()
 async def list_events(ctx: Context, days_ahead: int = 7) -> list[Event]:
     """List events only from explicitly allowed calendars; redact busy-only titles."""
     app = _ctx(ctx)
@@ -386,7 +414,7 @@ async def search_events(ctx: Context, text: str, days_ahead: int = 30) -> list[E
 
 
 @mcp.tool()
-async def create_event(
+async def create_event_confirmed(
     ctx: Context,
     title: str,
     start: str,
@@ -413,7 +441,7 @@ async def create_event(
 
 
 @mcp.tool()
-async def update_event(
+async def update_event_confirmed(
     ctx: Context,
     calendar_id: str,
     uid: str,
@@ -454,7 +482,7 @@ async def update_event(
 
 
 @mcp.tool()
-async def delete_event(
+async def delete_event_confirmed(
     ctx: Context, calendar_id: str, uid: str, confirmation: str
 ) -> str:
     """Delete an event after chat approval with confirmation='CONFIRMED'."""
