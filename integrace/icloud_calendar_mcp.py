@@ -10,8 +10,9 @@
 Credentials are resolved by icloud-mcp from macOS Keychain or the explicit
 ICLOUD_APP_PASSWORD fallback. This wrapper
 intentionally exposes no mail or contacts tools. Calendar writes remain gated
-by ICLOUD_ENABLE_WRITES=1 and an explicit confirm=true argument supplied only
-after the user confirms the concrete action in chat.
+by ICLOUD_ENABLE_WRITES=1 and a required confirmation token. The MCP client
+must pass confirmation="CONFIRMED" only after the user confirms the concrete
+action in chat.
 """
 
 from __future__ import annotations
@@ -333,9 +334,13 @@ def _require_writes(app: AppContext) -> None:
         )
 
 
-def _confirmed(app: AppContext, confirm: bool) -> bool:
+def _confirm_write(app: AppContext, confirmation: str) -> None:
     _require_writes(app)
-    return confirm
+    if confirmation != "CONFIRMED":
+        raise ValueError(
+            'Write not confirmed. After explicit user approval in chat, pass '
+            'confirmation="CONFIRMED".'
+        )
 
 
 @mcp.tool()
@@ -387,16 +392,15 @@ async def create_event(
     start: str,
     end: str,
     calendar_id: str,
+    confirmation: str,
     location: str = "",
-    confirm: bool = False,
 ) -> str:
-    """Create an event after the user confirms in chat; then pass confirm=true."""
+    """Create an event after chat approval with confirmation='CONFIRMED'."""
     app = _ctx(ctx)
+    _confirm_write(app, confirmation)
     writable = _write_policy()
     if calendar_id not in writable:
         raise ValueError(f"Calendar {calendar_id} is not configured for writes.")
-    if not _confirmed(app, confirm):
-        return "Cancelled — event not created."
     return await _run_calendar(
         app,
         _create_event_in_calendar,
@@ -413,14 +417,15 @@ async def update_event(
     ctx: Context,
     calendar_id: str,
     uid: str,
+    confirmation: str,
     title: str = "",
     start: str = "",
     end: str = "",
     location: str = "",
-    confirm: bool = False,
 ) -> str:
-    """Update an event after the user confirms in chat; then pass confirm=true."""
+    """Update an event after chat approval with confirmation='CONFIRMED'."""
     app = _ctx(ctx)
+    _confirm_write(app, confirmation)
     writable = _write_policy()
     if calendar_id not in writable:
         raise ValueError(f"Calendar {calendar_id} is not configured for writes.")
@@ -436,8 +441,6 @@ async def update_event(
     )
     if not changes:
         raise ValueError("At least one changed field is required.")
-    if not _confirmed(app, confirm):
-        return "Cancelled — event not updated."
     return await _run_calendar(
         app,
         _update_event_in_calendar,
@@ -452,15 +455,14 @@ async def update_event(
 
 @mcp.tool()
 async def delete_event(
-    ctx: Context, calendar_id: str, uid: str, confirm: bool = False
+    ctx: Context, calendar_id: str, uid: str, confirmation: str
 ) -> str:
-    """Delete an event after the user confirms in chat; then pass confirm=true."""
+    """Delete an event after chat approval with confirmation='CONFIRMED'."""
     app = _ctx(ctx)
+    _confirm_write(app, confirmation)
     writable = _write_policy()
     if calendar_id not in writable:
         raise ValueError(f"Calendar {calendar_id} is not configured for writes.")
-    if not _confirmed(app, confirm):
-        return "Cancelled — event not deleted."
     return await _run_calendar(
         app, _delete_event_in_calendar, calendar_id, uid
     )
