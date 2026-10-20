@@ -732,7 +732,9 @@ function renderCalendar() {
  const selected=calendarItems(calUI.date);
  const undated=(store.ukoly||[]).filter(x=>x.stav!=='hotovo'&&!x.termin&&!x.plan_datum&&(!calUI.area||x.oblast===calUI.area));
  const issue=calendarIssue(calUI.date);
- return '<h2>Kalendář</h2><p class="overview-intro">Schůzky, termíny a plánované úkoly. Klikni na den pro podrobnosti, na úkol pro úpravu.</p>'
+ const icloudUpdated=store.plandata?.icloud_aktualizovano,icloudCount=(store.plandata?.udalosti||[]).filter(x=>x.source==='icloud-cal').length,icloudState=store.plandata?.icloud_stav;
+ const icloudInfo=icloudUpdated?'<p class="integration-note"><b>iCloud:</b> '+esc(icloudState||'načteno')+' · '+icloudCount+' událostí · aktualizováno '+esc(new Date(icloudUpdated).toLocaleString('cs-CZ',{timeZone:'Europe/Prague'}))+'</p>':'<p class="integration-note"><b>iCloud:</b> zatím není synchronizovaný do panelu.</p>';
+ return '<h2>Kalendář</h2><p class="overview-intro">Schůzky, termíny a plánované úkoly. Klikni na den pro podrobnosti, na úkol pro úpravu.</p>'+icloudInfo
  +'<div class="calendar-toolbar"><button class="btn" data-cal-month="-1" aria-label="Předchozí měsíc">←</button><h3>'+first.toLocaleDateString('cs-CZ',{timeZone:'UTC',month:'long',year:'numeric'})+'</h3><button class="btn" data-cal-month="1" aria-label="Další měsíc">→</button><button class="btn" data-cal-today>Dnes</button><select id="calArea" style="width:auto" aria-label="Oblast"><option value="">Všechny oblasti</option>'+AREAS.map(a=>'<option value="'+esc(a.key)+'" '+(calUI.area===a.key?'selected':'')+'>'+esc(a.label)+'</option>').join('')+'</select></div>'
  +'<div class="calendar-legend">'+AREAS.map(a=>'<span class="'+a.cls+'"><span class="area-dot" aria-hidden="true"></span>'+esc(a.label)+'</span>').join('')+'</div>'
  +'<div class="calendar-layout"><div><div class="calendar-grid">'+['Po','Út','St','Čt','Pá','So','Ne'].map(x=>'<div class="calendar-weekday">'+x+'</div>').join('')+cells+'</div><p class="muted">Kalendáře načtené '+esc(store.plandata?.od||'—')+' až '+esc(store.plandata?.do||'—')+'. Mimo tento rozsah se zobrazují jen uložené úkoly. Na mobilu barevné značky otevři výběrem dne.</p></div>'
