@@ -16,13 +16,13 @@ by ICLOUD_ENABLE_WRITES=1 and an interactive confirmation for every action.
 from __future__ import annotations
 
 import asyncio
+import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from urllib.parse import unquote, urlparse
 
-from icloud_mcp import calendar as cal_ops
 from icloud_mcp import writes as write_ops
 from icloud_mcp.clients import CalendarClient
 from icloud_mcp.config import Settings
@@ -98,6 +98,113 @@ def _list_calendar_info(calendar: CalendarClient) -> list[CalendarInfo]:
     return result
 
 
+def _calendar_policy() -> tuple[set[str], set[str]]:
+    allowed = {
+        value.strip()
+        for value in os.getenv("ICLOUD_ALLOWED_CALENDAR_IDS", "").split(",")
+        if value.strip()
+    }
+    if not allowed:
+        raise RuntimeError(
+            "ICLOUD_ALLOWED_CALENDAR_IDS is empty. Configure explicitly allowed "
+            "calendar identifiers before reading events."
+        )
+    busy_only = {
+        value.strip()
+        for value in os.getenv("ICLOUD_BUSY_ONLY_CALENDAR_IDS", "").split(",")
+        if value.strip()
+    }
+    unknown = busy_only - allowed
+    if unknown:
+        raise RuntimeError(
+            "Busy-only calendar identifiers must also be present in "
+            "ICLOUD_ALLOWED_CALENDAR_IDS."
+        )
+    return allowed, busy_only
+
+
+def _sort_key(value, tz):
+    if isinstance(value, datetime):
+        return value.astimezone(tz)
+    return datetime.combine(value, time.min, tzinfo=tz)
+
+
+def _to_iso(value, tz) -> tuple[str, bool]:
+    if isinstance(value, datetime):
+        return value.astimezone(tz).isoformat(), False
+    if isinstance(value, date):
+        return value.isoformat(), True
+    return str(value), False
+
+
+def _list_events_filtered(
+    calendar: CalendarClient,
+    start: datetime,
+    end: datetime,
+    tz,
+    allowed: set[str],
+    busy_only: set[str],
+) -> list[Event]:
+    events: list[tuple[object, Event]] = []
+    for item in calendar.principal().calendars():
+        raw_url = str(getattr(item, "url", ""))
+        calendar_id = _calendar_identifier(raw_url)
+        if calendar_id not in allowed:
+            continue
+        try:
+            found = item.search(start=start, end=end, event=True, expand=True)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to read allowed iCloud calendar {calendar_id}: "
+                f"{type(exc).__name__}"
+            ) from exc
+        calendar_name = item.get_display_name()
+        for source_event in found:
+            component = source_event.icalendar_component
+            start_value = component.get("dtstart").dt
+            end_field = component.get("dtend")
+            start_iso, all_day = _to_iso(start_value, tz)
+            end_iso = _to_iso(end_field.dt, tz)[0] if end_field is not None else ""
+            is_busy_only = calendar_id in busy_only
+            events.append(
+                (
+                    _sort_key(start_value, tz),
+                    Event(
+                        uid="" if is_busy_only else str(component.get("uid", "")),
+                        summary="Obsazeno" if is_busy_only else str(
+                            component.get("summary", "(bez názvu)")
+                        ),
+                        start=start_iso,
+                        end=end_iso,
+                        all_day=all_day,
+                        calendar=calendar_name,
+                    ),
+                )
+            )
+    events.sort(key=lambda pair: pair[0])
+    return [event for _, event in events]
+
+
+def _search_events_filtered(
+    calendar: CalendarClient,
+    text: str,
+    start: datetime,
+    end: datetime,
+    tz,
+    allowed: set[str],
+    busy_only: set[str],
+) -> list[Event]:
+    searchable = allowed - busy_only
+    needle = text.casefold()
+    return [
+        event
+        for event in _list_events_filtered(
+            calendar, start, end, tz, searchable, set()
+        )
+        if needle in event.summary.casefold()
+    ]
+
+
 class Confirm(BaseModel):
     confirm: bool = True
 
@@ -135,19 +242,36 @@ async def list_calendars(ctx: Context) -> list[CalendarInfo]:
 
 @mcp.tool()
 async def list_events(ctx: Context, days_ahead: int = 7) -> list[Event]:
-    """List events from today through at most 31 days ahead."""
+    """List events only from explicitly allowed calendars; redact busy-only titles."""
     app = _ctx(ctx)
     start, end = _window(app, days_ahead)
-    return await _run_calendar(app, cal_ops.list_events, start, end, app.settings.tz)
+    allowed, busy_only = _calendar_policy()
+    return await _run_calendar(
+        app,
+        _list_events_filtered,
+        start,
+        end,
+        app.settings.tz,
+        allowed,
+        busy_only,
+    )
 
 
 @mcp.tool()
 async def search_events(ctx: Context, text: str, days_ahead: int = 30) -> list[Event]:
-    """Find events whose title matches text in a bounded future window."""
+    """Search titles in allowed calendars, excluding every busy-only calendar."""
     app = _ctx(ctx)
     start, end = _window(app, days_ahead)
+    allowed, busy_only = _calendar_policy()
     return await _run_calendar(
-        app, cal_ops.search_events, text, start, end, app.settings.tz
+        app,
+        _search_events_filtered,
+        text,
+        start,
+        end,
+        app.settings.tz,
+        allowed,
+        busy_only,
     )
 
 
