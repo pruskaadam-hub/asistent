@@ -2,9 +2,9 @@
 <html lang="cs">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>Asistent</title>
+<title>M.A.R.V.I.N. · osobní agenda</title>
 <style>
 :root{
   --bg:#f6f5f2;--surface:#fff;--surface-2:#efede8;--text:#1d1c1a;--muted:#6b6862;--border:#dedad2;
@@ -96,11 +96,20 @@ h2{font-size:25px;letter-spacing:-.6px}h3{font-size:17px}.card{padding:17px 18px
 .day-number{display:block;border:0;background:none;cursor:pointer;width:29px;height:29px;margin-bottom:4px}.calendar-item{display:block;width:100%;text-align:left;border:0;border-left:3px solid var(--area);border-radius:4px;padding:3px 5px;margin:3px 0;font-size:11px;background:var(--area-soft);color:var(--area);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.calendar-more{font-size:11px;color:var(--muted);border:0;background:none;cursor:pointer}.calendar-agenda h3{margin-top:0}.agenda-time{font-size:12px;color:var(--muted)}.calendar-legend{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0;font-size:12px}.calendar-task-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
 @media(max-width:1000px){.calendar-layout{grid-template-columns:1fr}.calendar-agenda{margin-top:8px}}@media(max-width:600px){.calendar-day{min-height:65px;padding:3px}.calendar-item{font-size:0;min-height:8px;padding:0;border-left-width:0}.calendar-weekday{padding:6px 1px}.calendar-more{font-size:10px}.day-number{width:25px;height:25px}.calendar-toolbar{gap:6px}}
 
+
+/* M.A.R.V.I.N. — pevná mobilní šířka */
+html{width:100%;overflow-x:clip;-webkit-text-size-adjust:100%;touch-action:pan-x pan-y}
+body{width:100%;max-width:100%;overflow-x:clip;touch-action:pan-x pan-y}
+main,header,.bar,nav,.card,.row,.form,.calendar-layout,.calendar-agenda{min-width:0;max-width:100%}
+.row>*{min-width:0;max-width:100%}.title,.tag,.task-note,.md,.muted,pre{overflow-wrap:anywhere;word-break:normal}
+img,video,svg{max-width:100%;height:auto}pre{white-space:pre-wrap}.form{grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))}
+.marvin-sheet{border:2px solid var(--accent);margin-bottom:20px}.integration-note{background:var(--surface-2);padding:12px;border-radius:10px}
+@media(max-width:600px){input,select,textarea,select.inline{font-size:16px!important}.bar{flex-wrap:wrap;gap:8px}.bar h1{flex:1}.sync{order:3;flex-basis:100%;margin:0}.toolbar>*{min-width:0}.btn{white-space:normal;overflow-wrap:anywhere}main{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.calendar-toolbar h3{flex-basis:50%}.calendar-toolbar select{max-width:100%}.toast{max-width:calc(100% - 24px)}}
 </style>
 </head>
 <body>
 <header>
-  <div class="bar"><h1>Asistent</h1><span class="sync" id="sync"></span><button class="btn sm" id="btnSettings" title="Nastavení připojení">Nastavení</button></div>
+  <div class="bar"><h1 title="Manažer Agendy, Rozhodování, Vyhodnocování Informací a Notifikací">M.A.R.V.I.N.</h1><span class="sync" id="sync"></span><button class="btn sm" id="btnSettings" title="Nastavení připojení">Nastavení</button></div>
   <nav id="nav"></nav>
 </header>
 <main id="main"></main>
@@ -247,7 +256,7 @@ const SCHEMAS = {
       { k: 'kontext_adama', l: 'Moje poznámka pro asistenta', t: 'textarea', wide: 1, ph: 'Co se opravdu děje, co je hotové, co potřebuji a na co čekám…' },
       { k: 'poznamka', l: 'Poznámka', t: 'textarea', wide: 1 }
     ],
-    meta: x => [x.odhad_min && tag(x.odhad_min + ' min · ' + (x.odhad_typ || 'odhad')), x.projekt && tag(x.projekt), x.oblast && areaTag(x.oblast), x.termin && dueTag(x.termin, x.stav === 'hotovo'), x.priorita === 'vysoká' && tag('vysoká priorita', 'bad'), x.zdroj && `<span class="muted">${esc(x.zdroj)}</span>`],
+    meta: x => [x.termin_typ==='výchozí interní' && tag('Interní lhůta '+(x.termin_dni||5)+' dní'), x.odhad_min && tag(x.odhad_min + ' min · ' + (x.odhad_typ || 'odhad')), x.projekt && tag(x.projekt), x.oblast && areaTag(x.oblast), x.termin && dueTag(x.termin, x.stav === 'hotovo'), x.priorita === 'vysoká' && tag('vysoká priorita', 'bad'), x.zdroj && `<span class="muted">${esc(x.zdroj)}</span>`],
     sort: (a, b) => (a.stav === 'hotovo') - (b.stav === 'hotovo') || String(a.termin || '9999').localeCompare(String(b.termin || '9999')),
     doneIf: x => x.stav === 'hotovo'
   },
@@ -370,6 +379,8 @@ function render() {
   else if (tab === 'schvaleni') m.innerHTML = renderSchvaleni();
   else if (tab === 'uceni') m.innerHTML = renderUceni();
   else if (SCHEMAS[tab]) m.innerHTML = renderCollection(tab);
+  if(marvinUI.draftTask) m.insertAdjacentHTML('afterbegin', renderDraftComposer());
+  if(marvinUI.calendarKey) m.insertAdjacentHTML('afterbegin', renderCalendarRequest());
 }
 
 /* ---------- přihlášení / nastavení ---------- */
@@ -404,7 +415,7 @@ function renderDnes() {
   const list = (arr, fn) => arr.length ? arr.map(fn).join('') : '';
   const taskCard = x => `<div class="card area-card ${areaInfo(x.oblast).cls}"><div class="row"><span class="grow title">${esc(x.nazev)}</span>${x.oblast ? areaTag(x.oblast) : ''}${dueTag(x.termin)}<button class="btn sm" data-act="done" data-id="${esc(x.id)}">Hotovo</button></div></div>`;
   return `<h2>${new Date().toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
-  <p class="overview-intro">Vše podstatné z tvých čtyř oblastí na jednom místě.</p>\n  ${areaOverview()}\n  <div class="stats">
+  <p class="overview-intro">Manažer Agendy, Rozhodování, Vyhodnocování Informací a Notifikací. Vše ze čtyř oblastí na jednom místě.</p>\n  ${areaOverview()}\n  <div class="stats">
     <div class="stat" data-go="ukoly"><span class="muted">Po termínu</span><b style="color:${late.length ? 'var(--bad)' : 'inherit'}">${late.length}</b></div>
     <div class="stat" data-go="ukoly"><span class="muted">Na dnes</span><b>${now.length}</b></div>
     <div class="stat" data-go="schvaleni"><span class="muted">Ke schválení</span><b>${koncepty.length}</b></div>
@@ -430,14 +441,14 @@ function renderSchvaleni() {
   const items = all.filter(c => view === 'ceka' ? c.stav === 'navrh' : c.stav !== 'navrh').sort((a, b) => String(b.vytvoreno || '').localeCompare(String(a.vytvoreno || '')));
   const lbl = { navrh: ['čeká', 'warn'], schvaleno: ['schváleno', 'good'], odeslano: ['odesláno', 'good'], zamitnuto: ['zamítnuto', 'bad'] };
   return `<h2>Ke schválení</h2>
-  <p class="muted">Koncepty e-mailů od asistenta. Upravený text se uloží jako příklad vašeho stylu. Odesíláte vždy sami z původní schránky.</p>
+  <p class="muted">Koncepty e-mailů od asistenta. Upravený text se uloží jako příklad vašeho stylu. Koncept v panelu není koncept ve schránce. iCloud Drafts zatím není přímo připojen; text můžeš zkopírovat nebo stáhnout jako .eml. Odeslání je vždy samostatný krok.</p>
   <div class="toolbar"><button class="btn ${view === 'ceka' ? 'pri' : ''}" data-cview="ceka">Čeká (${all.filter(c => c.stav === 'navrh').length})</button><button class="btn ${view === 'hotovo' ? 'pri' : ''}" data-cview="hotovo">Vyřízené</button></div>
   ${items.length ? items.map(c => `<div class="card" data-cid="${esc(c.id)}">
     <div class="row"><span class="grow title">${esc(c.predmet || '(bez předmětu)')}</span>${c.oblast ? areaTag(c.oblast) : ''}${tag(...(lbl[c.stav] || [c.stav]))}</div>
     <div class="muted">Komu: ${esc(c.komu || '')}${c.odeslat_z ? ' · odeslat z: ' + esc(c.odeslat_z) : ''}${c.vytvoreno ? ' · ' + fmtDate(c.vytvoreno) : ''}</div>
     ${c.kontext ? `<div class="muted" style="margin-top:4px">Kontext: ${esc(c.kontext)}</div>` : ''}
     ${c.stav === 'navrh' ? `<textarea data-ctext style="min-height:160px;margin-top:8px">${esc(c.text)}</textarea>
-      <div class="row" style="margin-top:8px"><button class="btn good" data-cact="schvalit">Schválit a zkopírovat</button><button class="btn" data-cact="kopirovat">Kopírovat</button><button class="btn" data-cact="ulozit">Uložit úpravu</button><button class="btn bad" data-cact="zamitnout">Zamítnout</button></div>`
+      <div class="row" style="margin-top:8px"><button class="btn good" data-cact="schvalit">Schválit a zkopírovat</button><button class="btn" data-cact="kopirovat">Kopírovat</button><button class="btn" data-marvin-eml="${esc(c.id)}">Stáhnout .eml</button><button class="btn" disabled title="Chybí přímé připojení iCloud Mail">iCloud Drafts · nepřipojeno</button><button class="btn" data-cact="ulozit">Uložit úpravu</button><button class="btn bad" data-cact="zamitnout">Zamítnout</button></div>`
       : `<pre class="draft">${esc(c.text)}</pre>${c.stav === 'schvaleno' ? '<div class="row"><button class="btn sm" data-cact="kopirovat">Kopírovat</button><button class="btn sm" data-cact="odeslano">Označit jako odesláno</button></div>' : ''}`}
   </div>`).join('') : `<div class="empty">${view === 'ceka' ? 'Žádné koncepty nečekají na schválení.' : 'Zatím nic vyřízeného.'}</div>`}`;
 }
@@ -500,6 +511,7 @@ async function saveForm(key, formEl) {
   if (id === '__new') store[key].push(Object.assign({ id: uid(), vytvoreno: today(), zdroj_zapisu: 'panel' }, data));
   else Object.assign(store[key].find(x => x.id === id), data, { upraveno: today() });
   if (key==='ukoly') { const item=store[key].find(x=>x.id===id)||store[key][store[key].length-1]; if(data.kontext_adama!==undefined && data.kontext_adama!==oldContext) item.kontext_upraveno=new Date().toISOString(); }
+  if (key==='ukoly') { const item=store[key].find(x=>x.id===id)||store[key][store[key].length-1]; const oldTerm=item.termin_typ; if(data.termin) { if(oldTerm==='výchozí interní') { const computed=defaultTaskDeadline(item); if(data.termin!==computed) item.termin_typ='ruční'; } } else applyDefaultDeadline(item); }
   if (key==='ukoly' && data.stav==='hotovo') { const item=store[key].find(x=>x.id===id) || store[key][store[key].length-1]; if(!item.hotovo) item.hotovo=today(); }
   if (await saveFile(key, `Panel: ${id === '__new' ? 'nový záznam' : 'úprava'} – ${S.title}`)) { ui.editing = null; ui.adding = false; render(); toast('Uloženo'); }
 }
@@ -569,7 +581,7 @@ $('#main').addEventListener('change', async e => {
   const el = e.target;
   if (el.dataset.filter) { (ui.filters[tab] = ui.filters[tab] || {})[el.dataset.filter] = el.value; render(); return; }
   if (el.dataset.quick) {
-    const x = store[tab].find(i => i.id === el.dataset.id); x[el.dataset.quick] = el.value; x.upraveno = today(); if (tab==='ukoly' && el.dataset.quick==='stav' && el.value==='hotovo') x.hotovo=today();
+    const x = store[tab].find(i => i.id === el.dataset.id); x[el.dataset.quick] = el.value; if(tab==='ukoly' && el.dataset.quick==='priorita' && x.termin_typ==='výchozí interní'){x.termin='';applyDefaultDeadline(x);}  x.upraveno = today(); if (tab==='ukoly' && el.dataset.quick==='stav' && el.value==='hotovo') x.hotovo=today();
     if (await saveFile(tab, `Panel: ${SCHEMAS[tab].title} – ${el.dataset.quick} → ${el.value}`)) { render(); toast('Uloženo'); }
   }
 });
@@ -615,7 +627,7 @@ function freeWindows(date,now=Date.now()) {
 function minutesOf(x) { return Math.max(5,Math.min(480,Number(x.odhad_min)||30)); }
 function priorityTasks(date) {
   const rank={'vysoká':0,'střední':1,'nízká':2};
-  return (store.ukoly||[]).filter(x=>x.stav!=='hotovo'&&x.stav!=='čeká na jiné'&&!x.cekam_na&&(!x.plan_datum||x.plan_datum<=date))
+  return (store.ukoly||[]).filter(x=>x.stav!=='hotovo'&&x.stav!=='čeká na jiné'&&(!x.plan_datum||x.plan_datum<=date))
     .sort((a,b)=>Number(!!b.termin&&b.termin<=date)-Number(!!a.termin&&a.termin<=date)||(rank[a.priorita]??1)-(rank[b.priorita]??1)||String(a.termin||'9999').localeCompare(String(b.termin||'9999')));
 }
 function makeDayPlan(date,now=Date.now()) {
@@ -772,8 +784,9 @@ function annotationControls(x) {
  if(x.kind!=='event'&&x.kind!=='busy')return '';
  const key=x.kind==='busy'?busyKey(x.busy):x.event.series_id?'occurrence:'+x.event.series_id+':'+x.event.occurrence_date:x.event.source==='rucni-agenda'?x.event.id:eventKey(x.event);
  const a=x.kind==='busy'?annotationFor(key):x.event.annotation;
+ const originalButton=x.kind==='event'&&x.event.source!=='rucni-agenda'?'<button class="btn sm" data-marvin-calendar="'+esc(key)+'">Navrhnout změnu Google události</button>':'';
  return (a?.kontext?processingBadge('anotace',a)+'<div class="task-note"><b>Moje upřesnění:</b><br>'+esc(a.kontext)+'</div>':'')
- +'<div class="calendar-task-actions"><button class="btn sm" data-ann-edit="'+esc(key)+'">'+(a?'Upravit moje upřesnění':'Doplnit poznámku / upřesnit')+'</button>'+(a?'<button class="btn sm" data-ann-task="'+esc(a.id)+'">Vytvořit navazující úkol</button>':'')+(x.event?.series_id?'<button class="btn sm" data-ann-edit="'+esc(x.event.series_id)+'">Upravit celou řadu</button>':'')+'</div>';
+ +'<div class="calendar-task-actions">'+originalButton+'<button class="btn sm" data-ann-edit="'+esc(key)+'">'+(a?'Upravit moje upřesnění':'Doplnit poznámku / upřesnit')+'</button>'+(a?'<button class="btn sm" data-ann-task="'+esc(a.id)+'">Vytvořit navazující úkol</button>':'')+(x.event?.series_id?'<button class="btn sm" data-ann-edit="'+esc(x.event.series_id)+'">Upravit celou řadu</button>':'')+'</div>';
 }
 function renderAnnotationEditor() {
  if(!annotationUI.kind)return '';
@@ -832,7 +845,7 @@ $('#main').addEventListener('click',async e=>{
   const id='annotation:'+a.id+':task';
   store.ukoly=store.ukoly||[];
   if(!store.ukoly.some(x=>x.id===id)){
-   store.ukoly.push({id,vytvoreno:today(),zdroj_zapisu:'panel',nazev:'Navázat: '+a.nazev,oblast:a.oblast,termin:'',stav:'otevřený',priorita:'střední',kontext_adama:a.kontext||'',zdroj:'Ruční agenda · '+a.id,zdrojove_id:a.id});
+   store.ukoly.push(applyDefaultDeadline({id,vytvoreno:today(),zdroj_zapisu:'panel',nazev:'Navázat: '+a.nazev,oblast:a.oblast,termin:'',stav:'otevřený',priorita:'střední',kontext_adama:a.kontext||'',zdroj:'Ruční agenda · '+a.id,zdrojove_id:a.id}));
    if(!await saveFile('ukoly','Panel: navazující úkol z anotace'))return;
   }
   tab='ukoly';ui.filters.ukoly={};ui.q.ukoly='';ui.adding=false;ui.editing=id;render();
@@ -864,7 +877,8 @@ function renderProcessingLog() {
 const taskNoteUI={editing:null};
 function taskNoteEditor(x) {
  if(!x)return '';
- if(taskNoteUI.editing!==x.id)return '<div class="calendar-task-actions"><button class="btn sm" data-task-note="'+esc(x.id)+'">'+(x.kontext_adama?'Doplnit / upravit moji poznámku':'+ Poznámka pro asistenta')+'</button></div>';
+ const draftButton='<button class="btn sm" data-marvin-draft="'+esc(x.id)+'">Vygenerovat draft e-mailu</button>'; 
+ if(taskNoteUI.editing!==x.id)return '<div class="calendar-task-actions">'+draftButton+'<button class="btn sm" data-task-note="'+esc(x.id)+'">'+(x.kontext_adama?'Doplnit / upravit moji poznámku':'+ Poznámka pro asistenta')+'</button></div>';
  return '<div class="card" data-task-note-box style="margin-top:12px;background:var(--surface-2)"><label>Moje poznámka pro asistenta<textarea data-task-note-text style="margin-top:6px;min-height:110px" placeholder="Např. schůzka proběhla, čekám na podklady od Petra…">'+esc(x.kontext_adama||'')+'</textarea></label><p class="muted">Po uložení asistent při nejbližší hodinové kontrole zapracuje změny do souvisejících úkolů, zápisů a vlastního plánu. Pro okamžité zpracování napiš do chatu „zapracuj moje poslední upřesnění“.</p><div class="calendar-task-actions"><button class="btn pri" data-task-note-save="'+esc(x.id)+'">Uložit a předat asistentovi</button><button class="btn" data-task-note-cancel>Zrušit</button></div>'+processingBadge('ukol',x)+'</div>';
 }
 $('#main').addEventListener('click',async e=>{
@@ -883,6 +897,55 @@ $('#main').addEventListener('click',async e=>{
   finally{b.disabled=false;}
  }
 });
+
+/* ---------- M.A.R.V.I.N.: lhůty, koncepty a žádosti o změny ---------- */
+const marvinUI={draftTask:null,calendarKey:null};
+function addCalendarDays(date,days){const d=new Date(date+'T12:00:00Z');if(!Number.isFinite(d.getTime()))return '';d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
+function taskDeadlineBase(x){return String(x.datum_zadani||x.zdrojove_datum||x.vytvoreno||today()).slice(0,10);}
+function defaultTaskDeadline(x){const d=addCalendarDays(taskDeadlineBase(x),x.priorita==='vysoká'?2:5);return x.plan_datum&&x.plan_datum>d?x.plan_datum:d;}
+function applyDefaultDeadline(x){if(x.stav==='hotovo'||x.termin)return x;x.termin=defaultTaskDeadline(x);x.termin_typ='výchozí interní';x.termin_od=taskDeadlineBase(x);x.termin_dni=x.priorita==='vysoká'?2:5;return x;}
+function renderDraftComposer(){
+ const x=(store.ukoly||[]).find(t=>t.id===marvinUI.draftTask);if(!x)return '';
+ const subject=String(x.projekt||x.nazev||'').replace(/[\r\n]/g,' ');
+ const text='Dobrý den,\n\nrád bych navázal na téma „'+(x.nazev||'')+'“. Můžete mi prosím sdělit aktuální stav a co je potřeba pro další postup?\n\nDěkuji a přeji hezký den,\nAdam';
+ return '<section class="card marvin-sheet" role="region" aria-label="Nový koncept"><h3>Draft e-mailu z úkolu</h3><p class="muted">Základní návrh bez AI služby. Uprav otázku podle skutečného záměru; příjemce vždy vyber ty. Pro propracovanou AI odpověď lze předat tento úkol do chatu.</p><label for="draftTo">Komu</label><input id="draftTo" type="email" autocomplete="email"><label for="draftFrom">Odesílat z</label><select id="draftFrom"><option>pruskaadam@me.com</option><option>adam.pruska@cometx.ch</option><option>assistantpruska@gmail.com</option></select><label for="draftSubject">Předmět</label><input id="draftSubject" value="'+esc(subject)+'"><label for="draftBody">Text ke kontrole</label><textarea id="draftBody" style="min-height:220px">'+esc(text)+'</textarea><p class="integration-note">Uloží se do soukromého panelu → Ke schválení. Přímé iCloud Drafts zatím není připojené. Nic se neodešle.</p><div class="row"><button class="btn pri" data-marvin-save-draft>Uložit koncept do panelu</button><button class="btn" data-marvin-ai-draft="'+esc(x.id)+'">Kopírovat zadání pro AI v chatu</button><button class="btn" data-marvin-close>Zrušit</button></div></section>';
+}
+function renderCalendarRequest(){
+ const e=(store.plandata?.udalosti||[]).find(x=>eventKey(x)===marvinUI.calendarKey);if(!e)return '';
+ return '<section class="card marvin-sheet"><h3>Změna původní Google události</h3><p class="muted">Ulož konkrétní návrh pro M.A.R.V.I.N. Chat provede změnu, pokud má kalendář oprávnění k zápisu a pokyn je jednoznačný. Tohle tlačítko Google přímo nemění.</p><label for="googleTitle">Název</label><input id="googleTitle" value="'+esc(e.title)+'"><label for="googleDate">Datum</label><input id="googleDate" type="date" value="'+esc(pragueDate(e.start))+'"><label for="googleStart">Začátek</label><input id="googleStart" type="time" value="'+esc(timeLabel(Date.parse(e.start)))+'"><label for="googleEndDate">Datum konce</label><input id="googleEndDate" type="date" value="'+esc(pragueDate(e.end))+'"><label for="googleEnd">Konec</label><input id="googleEnd" type="time" value="'+esc(timeLabel(Date.parse(e.end)))+'"><label for="googleReason">Co a proč změnit</label><textarea id="googleReason"></textarea><p class="integration-note">CometX a importované kalendáře mají nyní jen čtení. Zapisovatelný je sběrný kalendář assistantpruska@gmail.com. Pro CometX nastav sdílení „Provádět změny událostí“; LOC zůstává pouze dostupnost.</p><div class="row"><button class="btn pri" data-marvin-save-calendar>Předat návrh asistentovi</button><button class="btn" data-marvin-close>Zrušit</button></div></section>';
+}
+function downloadDraft(c){
+ const clean=v=>String(v||'').replace(/[\r\n]/g,' ');
+ const subject='=?UTF-8?B?'+b64encode(clean(c.predmet))+'?=';
+ const raw=['X-Unsent: 1','To: '+clean(c.komu),'From: '+clean(c.odeslat_z),'Subject: '+subject,'MIME-Version: 1.0','Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',''+b64encode(c.text||'').match(/.{1,76}/g)?.join('\r\n')].join('\r\n');
+ const url=URL.createObjectURL(new Blob([raw],{type:'message/rfc822'})),a=document.createElement('a');a.href=url;a.download='marvin-koncept.eml';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Soubor stažen; není automaticky uložený v iCloud Drafts.');
+}
+$('#main').addEventListener('click',async e=>{
+ const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.marvinDraft){marvinUI.draftTask=b.dataset.marvinDraft;render();window.scrollTo(0,0);return;}
+ if(b.dataset.marvinCalendar){marvinUI.calendarKey=b.dataset.marvinCalendar;render();window.scrollTo(0,0);return;}
+ if(b.hasAttribute('data-marvin-close')){marvinUI.draftTask=null;marvinUI.calendarKey=null;render();return;}
+ if(b.dataset.marvinEml){const c=(store.koncepty||[]).find(x=>x.id===b.dataset.marvinEml);if(c)downloadDraft({...c,text:b.closest('[data-cid]')?.querySelector('[data-ctext]')?.value||c.text});return;}
+ if(b.dataset.marvinAiDraft){const text='M.A.R.V.I.N., připrav koncept odpovědi pro úkol '+b.dataset.marvinAiDraft+'. Načti jeho aktuální kontext a povolené podklady v asistent-data/main. Nevymýšlej příjemce, částky ani závazky. Ulož pouze do koncepty.json se stavem navrh, nic neposílej.';try{await navigator.clipboard.writeText(text);toast('Zadání zkopírováno; vlož ho do chatu.');}catch{toast('Kopírování není dostupné. Požádej chat o koncept podle ID úkolu.');}return;}
+ if(b.hasAttribute('data-marvin-save-draft')){
+  const id=marvinUI.draftTask,to=$('#draftTo').value.trim(),from=$('#draftFrom').value,subject=$('#draftSubject').value.trim(),text=$('#draftBody').value.trim();
+  if(!to||!$('#draftTo').checkValidity()||!subject||!text){toast('Vyplň platného příjemce, předmět a text.');return;}
+  b.disabled=true;try{await loadFile('koncepty');const key='task:'+id+':draft',existing=store.koncepty.find(x=>x.zdrojove_id===id&&x.stav==='navrh');if(existing){marvinUI.draftTask=null;tab='schvaleni';render();toast('Otevřen stávající návrh, nevytvářím duplikát.');return;}
+  const x=(store.ukoly||[]).find(x=>x.id===id);store.koncepty.push({id:existing?.id||key+':'+uid(),vytvoreno:today(),zdroj_zapisu:'panel',autor:'Adam',zdrojove_id:id,komu:to,odeslat_z:from,predmet:subject,text,kontext:'Návrh z úkolu: '+(x?.nazev||id),oblast:x?.oblast||'Osobní',stav:'navrh',generator:'šablona upravená uživatelem',ulozeni_schranka:from==='pruskaadam@me.com'?'nepripojeno':'pouze_panel'});
+  if(await saveFile('koncepty','Panel: M.A.R.V.I.N. koncept z úkolu')){marvinUI.draftTask=null;tab='schvaleni';render();toast('Koncept uložený v panelu.');}}catch(err){toast('Koncept se nepodařilo uložit: '+err.message);}finally{b.disabled=false;}return;
+ }
+ if(b.hasAttribute('data-marvin-save-calendar')){
+  const original=(store.plandata?.udalosti||[]).find(x=>eventKey(x)===marvinUI.calendarKey);if(!original)return;
+  const title=$('#googleTitle').value.trim(),reason=$('#googleReason').value.trim(),start=localInstant($('#googleDate').value,$('#googleStart').value),end=localInstant($('#googleEndDate').value,$('#googleEnd').value);
+  if(!title||!reason||!Number.isFinite(start)||!Number.isFinite(end)||end<=start){toast('Vyplň důvod a platný začátek i konec.');return;}
+  b.disabled=true;try{await loadFile('anotace');const key=eventKey(original),old=annotationFor(key),rev=new Date().toISOString();const context=(old?.kontext?old.kontext+'\n\n':'')+'Požadavek na změnu původní Google události: '+title+', '+new Date(start).toISOString()+' až '+new Date(end).toISOString()+'. Důvod: '+reason;
+  const entry={...(old||{id:uid(),vytvoreno:today(),zdroj_zapisu:'panel'}),typ:'anotace',source_key:key,calendar_id:original.calendar_id,event_id:original.id,nazev:old?.nazev||original.title,oblast:old?.oblast||original.oblast,kontext:context,upraveno:rev,autor:'Adam',pozadovana_zmena_google:{calendar_id:original.calendar_id,event_id:original.id,title,start:new Date(start).toISOString(),end:new Date(end).toISOString(),duvod:reason,stav:'navrh'}};
+  if(old)Object.assign(old,entry);else store.anotace.push(entry);
+  if(await saveFile('anotace','Panel: návrh změny Google události')){marvinUI.calendarKey=null;render();toast('Návrh uložen pro zpracování v chatu.');}}catch(err){toast('Uložení selhalo: '+err.message);}finally{b.disabled=false;}
+ }
+});
+document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
+document.addEventListener('touchmove',e=>{if(e.touches.length>1)e.preventDefault();},{passive:false});
 
 /* ---------- start ---------- */
 (async () => {
