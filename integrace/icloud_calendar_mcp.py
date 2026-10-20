@@ -314,10 +314,6 @@ def _search_events_filtered(
     ]
 
 
-class Confirm(BaseModel):
-    confirm: bool = True
-
-
 def _window(app: AppContext, days_ahead: int) -> tuple[datetime, datetime]:
     days = max(0, min(days_ahead, 31))
     local_today = datetime.now(app.settings.tz).date()
@@ -336,10 +332,9 @@ def _require_writes(app: AppContext) -> None:
         )
 
 
-async def _confirmed(ctx: Context, app: AppContext, message: str) -> bool:
+def _confirmed(app: AppContext, confirm: bool) -> bool:
     _require_writes(app)
-    result = await ctx.elicit(message=message, schema=Confirm)
-    return result.action == "accept"
+    return confirm
 
 
 @mcp.tool()
@@ -392,17 +387,14 @@ async def create_event(
     end: str,
     calendar_id: str,
     location: str = "",
+    confirm: bool = False,
 ) -> str:
-    """Create an event in an explicitly writable calendar after confirmation."""
+    """Create an event after the user confirms in chat; then pass confirm=true."""
     app = _ctx(ctx)
     writable = _write_policy()
     if calendar_id not in writable:
         raise ValueError(f"Calendar {calendar_id} is not configured for writes.")
-    if not await _confirmed(
-        ctx,
-        app,
-        f"Create iCloud event '{title}' in calendar {calendar_id} from {start} to {end}?",
-    ):
+    if not _confirmed(app, confirm):
         return "Cancelled — event not created."
     return await _run_calendar(
         app,
@@ -424,8 +416,9 @@ async def update_event(
     start: str = "",
     end: str = "",
     location: str = "",
+    confirm: bool = False,
 ) -> str:
-    """Update one event in an explicitly writable calendar after confirmation."""
+    """Update an event after the user confirms in chat; then pass confirm=true."""
     app = _ctx(ctx)
     writable = _write_policy()
     if calendar_id not in writable:
@@ -442,9 +435,7 @@ async def update_event(
     )
     if not changes:
         raise ValueError("At least one changed field is required.")
-    if not await _confirmed(
-        ctx, app, f"Update iCloud event {uid} in calendar {calendar_id}: {changes}?"
-    ):
+    if not _confirmed(app, confirm):
         return "Cancelled — event not updated."
     return await _run_calendar(
         app,
@@ -459,15 +450,15 @@ async def update_event(
 
 
 @mcp.tool()
-async def delete_event(ctx: Context, calendar_id: str, uid: str) -> str:
-    """Delete one event in an explicitly writable calendar after confirmation."""
+async def delete_event(
+    ctx: Context, calendar_id: str, uid: str, confirm: bool = False
+) -> str:
+    """Delete an event after the user confirms in chat; then pass confirm=true."""
     app = _ctx(ctx)
     writable = _write_policy()
     if calendar_id not in writable:
         raise ValueError(f"Calendar {calendar_id} is not configured for writes.")
-    if not await _confirmed(
-        ctx, app, f"Permanently delete iCloud event {uid} in calendar {calendar_id}?"
-    ):
+    if not _confirmed(app, confirm):
         return "Cancelled — event not deleted."
     return await _run_calendar(
         app, _delete_event_in_calendar, calendar_id, uid
