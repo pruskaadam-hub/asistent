@@ -256,7 +256,7 @@ const SCHEMAS = {
       { k: 'kontext_adama', l: 'Moje poznámka pro asistenta', t: 'textarea', wide: 1, ph: 'Co se opravdu děje, co je hotové, co potřebuji a na co čekám…' },
       { k: 'poznamka', l: 'Poznámka', t: 'textarea', wide: 1 }
     ],
-    meta: x => [x.termin_typ==='výchozí interní' && tag('Interní lhůta '+(x.termin_dni||5)+' dní'), x.odhad_min && tag(x.odhad_min + ' min · ' + (x.odhad_typ || 'odhad')), x.projekt && tag(x.projekt), x.oblast && areaTag(x.oblast), x.termin && dueTag(x.termin, x.stav === 'hotovo'), x.priorita === 'vysoká' && tag('vysoká priorita', 'bad'), x.zdroj && `<span class="muted">${esc(x.zdroj)}</span>`],
+    meta: x => [x.odhad_min && tag(x.odhad_min + ' min · ' + (x.odhad_typ || 'odhad')), x.projekt && tag(x.projekt), x.oblast && areaTag(x.oblast), x.termin && taskDeadlineTag(x), x.priorita === 'vysoká' && tag('vysoká priorita', 'bad'), x.zdroj && `<span class="muted">${esc(x.zdroj)}</span>`],
     sort: (a, b) => (a.stav === 'hotovo') - (b.stav === 'hotovo') || String(a.termin || '9999').localeCompare(String(b.termin || '9999')),
     doneIf: x => x.stav === 'hotovo'
   },
@@ -348,6 +348,10 @@ function dueTag(d, done, label) {
   return d < t ? tag('po termínu · ' + txt, 'bad') : d === t ? tag('dnes', 'warn') : tag(txt);
 }
 function stavClass(v) { return ({ 'Aktivní': 'good', 'Vypnuto': '', 'Čeká na schválení': 'warn', 'Plánováno': 'acc', 'hotovo': 'good', 'zaplaceno': 'good', 'nezaplaceno': 'warn' })[v] || ''; }
+function fmtDeadlineDate(s){const p=String(s||'').slice(0,10).split('-');return p.length===3?p[2]+'.'+p[1]+'.'+p[0]:String(s||'');}
+function taskDeadlineTag(x){if(!x||!x.termin)return '';const cls=x.stav==='hotovo'?'good':x.termin<today()?'bad':x.termin===today()?'warn':'';return tag('deadline '+fmtDeadlineDate(x.termin),cls);}
+const PRIORITY_RANK={'vysoká':0,'střední':1,'nízká':2};
+function taskComparator(mode){return (a,b)=>{const done=(a.stav==='hotovo')-(b.stav==='hotovo');if(done)return done;const pa=PRIORITY_RANK[a.priorita]??9,pb=PRIORITY_RANK[b.priorita]??9,da=String(a.termin||'9999-12-31'),db=String(b.termin||'9999-12-31');if(mode==='priority-asc')return pa-pb||da.localeCompare(db);if(mode==='priority-desc')return pb-pa||da.localeCompare(db);if(mode==='deadline-desc')return db.localeCompare(da)||pa-pb;return da.localeCompare(db)||pa-pb;};}
 
 /* ---------- navigace ---------- */
 const TABS = [
@@ -356,7 +360,7 @@ const TABS = [
 ];
 let tab = 'dnes';
 try { tab = localStorage.getItem('asistent.tab') || 'dnes'; } catch (e) {}
-const ui = { filters: {}, q: {}, editing: null, adding: false, conceptView: 'ceka' };
+const ui = { filters: {}, q: {}, editing: null, adding: false, conceptView: 'ceka', sorts: { ukoly: 'deadline-asc' }, taskDetails: null };
 function renderNav() {
   const pending = (store.koncepty || []).filter(c => c.stav === 'navrh').length;
   $('#nav').innerHTML = TABS.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${l}${k === 'schvaleni' && pending ? `<span class="count">${pending}</span>` : ''}</button>`).join('');
@@ -424,7 +428,7 @@ function renderDnes() {
   </div>
   ${zdrojeProblem.length ? `<div class="card" style="border-color:var(--warn)"><b>Pozor na zdroje:</b> ${zdrojeProblem.map(z => esc(z.nazev)).join(', ')}</div>` : ''}
   <div class="group-heading"><h3>Otevřené úkoly podle oblastí</h3><button class="btn sm" data-go="ukoly">Všechny úkoly →</button></div>
-  ${groupedTasks(ukoly.slice().sort(SCHEMAS.ukoly.sort), x => '<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="row"><span class="grow title">'+esc(x.nazev)+'</span></div><div class="row task-meta">'+(x.termin?dueTag(x.termin):'<span class="muted">Bez termínu</span>')+(x.priorita==='vysoká'?tag('Vysoká priorita','bad'):'')+'<span class="grow"></span><button class="btn sm" data-act="done" data-id="'+esc(x.id)+'">Hotovo</button></div>'+taskNoteEditor(x)+'</div>')}
+  ${groupedTasks(ukoly.slice().sort(SCHEMAS.ukoly.sort), x => '<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="row"><span class="grow title">'+esc(x.nazev)+'</span></div><div class="row task-meta">'+(x.termin?taskDeadlineTag(x):'<span class="muted">Bez termínu</span>')+(x.priorita==='vysoká'?tag('Vysoká priorita','bad'):'')+'<span class="grow"></span><button class="btn sm" data-act="done" data-id="'+esc(x.id)+'">Hotovo</button></div>'+taskNoteEditor(x)+'</div>')}
   <div class="card"><div class="row"><b class="grow">Co se dnes opravdu vejde?</b><button class="btn pri" data-go="plan">Plán, termíny a uzavření dne →</button></div></div>
   <h3>Report asistenta</h3>
   <div class="card md">${store.report ? mdToHtml(store.report) : '<span class="muted">Asistent zatím report nevytvořil. Objeví se tu po prvním ranním běhu.</span>'}</div>
@@ -471,9 +475,10 @@ function renderCollection(key) {
   const f = ui.filters[key] || {}; const q = (ui.q[key] || '').toLowerCase();
   let shown = items.filter(x => Object.entries(f).every(([k, v]) => !v || x[k] === v));
   if (q) shown = shown.filter(x => S.searchKeys.some(k => String(x[k] || '').toLowerCase().includes(q)));
-  if (S.sort) shown.sort(S.sort);
+  if(key==='ukoly') shown.sort(taskComparator(ui.sorts.ukoly)); else if (S.sort) shown.sort(S.sort);
   const filterFields = S.fields.filter(fd => fd.filter);
-  const toolbar = `<div class="toolbar"><input placeholder="Hledat…" data-q value="${esc(ui.q[key] || '')}">
+  const sortControl=key==='ukoly'?`<select data-sort aria-label="Řazení úkolů"><option value="deadline-asc" ${ui.sorts.ukoly==='deadline-asc'?'selected':''}>Deadline: nejbližší</option><option value="deadline-desc" ${ui.sorts.ukoly==='deadline-desc'?'selected':''}>Deadline: nejpozdější</option><option value="priority-asc" ${ui.sorts.ukoly==='priority-asc'?'selected':''}>Priorita: nejvyšší</option><option value="priority-desc" ${ui.sorts.ukoly==='priority-desc'?'selected':''}>Priorita: nejnižší</option></select>`:'';
+  const toolbar = `<div class="toolbar"><input placeholder="Hledat…" data-q value="${esc(ui.q[key] || '')}">${sortControl}
     ${filterFields.map(fd => { const opts = fd.t === 'oblast' ? oblastOpts() : fd.o; return `<select data-filter="${fd.k}"><option value="">${esc(fd.l)}: vše</option>${opts.map(o => `<option ${f[fd.k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`; }).join('')}
     <button class="btn pri" data-act="add">+ ${esc(S.addLabel)}</button></div>`;
   const card = x => {
@@ -481,8 +486,9 @@ function renderCollection(key) {
     const meta = (S.meta ? S.meta(x) : []).filter(Boolean).join(' ');
     const quick = S.fields.filter(fd => fd.quick).map(fd => `<select class="inline" data-quick="${fd.k}" data-id="${esc(x.id)}" title="${esc(fd.l)}">${fd.o.map(o => `<option ${x[fd.k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).join('');
     const title = S.titleOf ? S.titleOf(x) : x[S.fields[0].k];
-    return `<div class="card area-card ${areaInfo(x.oblast).cls} ${S.doneIf && S.doneIf(x) ? 'done' : ''}"><div class="row"><span class="grow title">${esc(title)}</span>${quick}<button class="btn sm" data-act="edit" data-id="${esc(x.id)}">Upravit</button></div>
-      ${meta ? `<div class="row task-meta">${meta}</div>` : ''}${key === 'ukoly' ? taskDetails(x) : ''}${key === 'ukoly' && x.poznamka ? `<div class="task-note">${esc(x.poznamka)}</div>` : ''}${S.body ? S.body(x) : ''}</div>`;
+    const isTask=key==='ukoly',detailOpen=isTask&&ui.taskDetails===x.id;
+    return `<div class="card area-card ${areaInfo(x.oblast).cls} ${S.doneIf && S.doneIf(x) ? 'done' : ''}"><div class="row"><span class="grow title">${esc(title)}</span>${quick}${isTask?`<button class="btn sm" data-act="detail" data-id="${esc(x.id)}" aria-expanded="${detailOpen}">${detailOpen?'Skrýt detail':'Detail'}</button>`:''}<button class="btn sm" data-act="edit" data-id="${esc(x.id)}">Upravit</button></div>
+      ${meta ? `<div class="row task-meta">${meta}</div>` : ''}${detailOpen ? taskDetails(x)+(x.poznamka?`<div class="task-note">${esc(x.poznamka)}</div>`:'') : ''}${S.body ? S.body(x) : ''}</div>`;
   };
   return `<h2>${esc(S.title)} <span class="muted">(${items.length})</span></h2>${S.intro ? `<p class="muted">${esc(S.intro)}</p>` : ''}${key === 'ukoly' ? areaOverview() : ''}${S.fields.some(fd=>fd.k==='oblast') ? areaFilters(key) : ''}${toolbar}
     ${ui.adding ? formHtml(key, null) : ''}
@@ -565,6 +571,7 @@ $('#main').addEventListener('click', async e => {
   const act = t.dataset.act;
   if (act === 'done') { const x = store.ukoly.find(u => u.id === t.dataset.id); x.stav = 'hotovo'; x.hotovo = today(); if (await saveFile('ukoly', 'Panel: úkol hotov')) { render(); toast('Hotovo'); } return; }
   if (act === 'add') { ui.adding = true; ui.editing = null; render(); return; }
+  if (act === 'detail') { ui.taskDetails = ui.taskDetails===t.dataset.id ? null : t.dataset.id; render(); return; }
   if (act === 'edit') { ui.editing = t.dataset.id; ui.adding = false; render(); return; }
   if (act === 'cancel') { ui.editing = null; ui.adding = false; render(); return; }
   if (act === 'save') return saveForm(tab, t.closest('[data-form]'));
@@ -579,6 +586,7 @@ $('#main').addEventListener('click', async e => {
 });
 $('#main').addEventListener('change', async e => {
   const el = e.target;
+  if (el.dataset.sort) { ui.sorts.ukoly=el.value; render(); return; }
   if (el.dataset.filter) { (ui.filters[tab] = ui.filters[tab] || {})[el.dataset.filter] = el.value; render(); return; }
   if (el.dataset.quick) {
     const x = store[tab].find(i => i.id === el.dataset.id); x[el.dataset.quick] = el.value; if(tab==='ukoly' && el.dataset.quick==='priorita' && x.termin_typ==='výchozí interní'){x.termin='';applyDefaultDeadline(x);}  x.upraveno = today(); if (tab==='ukoly' && el.dataset.quick==='stav' && el.value==='hotovo') x.hotovo=today();
@@ -593,7 +601,7 @@ $('#main').addEventListener('input', e => {
 /* ---------- Plánování času ---------- */
 const planUI={date:today(),duration:30};
 function taskDetails(x) {
-  return taskNoteEditor(x) + (x.kontext_adama ? processingBadge('ukol',x)+'<div class="card" style="margin-top:10px;background:var(--surface-2)"><b>Moje upřesnění</b><div class="task-note">'+esc(x.kontext_adama)+'</div></div>':'') + (x.dalsi_krok ? '<div class="task-note"><b>Další krok:</b> '+esc(x.dalsi_krok)+'</div>':'')
+  return taskNoteEditor(x,true) + (x.kontext_adama ? processingBadge('ukol',x)+'<div class="card" style="margin-top:10px;background:var(--surface-2)"><b>Moje upřesnění</b><div class="task-note">'+esc(x.kontext_adama)+'</div></div>':'') + (x.dalsi_krok ? '<div class="task-note"><b>Další krok:</b> '+esc(x.dalsi_krok)+'</div>':'')
     +(x.kroky ? '<details class="task-note"><summary>Kroky projektu</summary><p style="white-space:pre-wrap">'+esc(x.kroky)+'</p></details>':'')
     +(x.cekam_na ? '<div class="task-note">Čekám na: '+esc(x.cekam_na)+'</div>':'')
     +(x.slib_komu ? '<div class="task-note">Slíbeno: '+esc(x.slib_komu)+'</div>':'')
@@ -877,7 +885,7 @@ function renderProcessingLog() {
 const taskNoteUI={editing:null};
 function taskNoteEditor(x) {
  if(!x)return '';
- const draftButton='<button class="btn sm" data-marvin-draft="'+esc(x.id)+'">Vygenerovat draft e-mailu</button>'; 
+ const draftButton=arguments[1]?'<button class="btn sm" data-marvin-draft="'+esc(x.id)+'">Vygenerovat draft e-mailu</button>':''; 
  if(taskNoteUI.editing!==x.id)return '<div class="calendar-task-actions">'+draftButton+'<button class="btn sm" data-task-note="'+esc(x.id)+'">'+(x.kontext_adama?'Doplnit / upravit moji poznámku':'+ Poznámka pro asistenta')+'</button></div>';
  return '<div class="card" data-task-note-box style="margin-top:12px;background:var(--surface-2)"><label>Moje poznámka pro asistenta<textarea data-task-note-text style="margin-top:6px;min-height:110px" placeholder="Např. schůzka proběhla, čekám na podklady od Petra…">'+esc(x.kontext_adama||'')+'</textarea></label><p class="muted">Po uložení asistent při nejbližší hodinové kontrole zapracuje změny do souvisejících úkolů, zápisů a vlastního plánu. Pro okamžité zpracování napiš do chatu „zapracuj moje poslední upřesnění“.</p><div class="calendar-task-actions"><button class="btn pri" data-task-note-save="'+esc(x.id)+'">Uložit a předat asistentovi</button><button class="btn" data-task-note-cancel>Zrušit</button></div>'+processingBadge('ukol',x)+'</div>';
 }
@@ -904,11 +912,17 @@ function addCalendarDays(date,days){const d=new Date(date+'T12:00:00Z');if(!Numb
 function taskDeadlineBase(x){return String(x.datum_zadani||x.zdrojove_datum||x.vytvoreno||today()).slice(0,10);}
 function defaultTaskDeadline(x){const d=addCalendarDays(taskDeadlineBase(x),x.priorita==='vysoká'?2:5);return x.plan_datum&&x.plan_datum>d?x.plan_datum:d;}
 function applyDefaultDeadline(x){if(x.stav==='hotovo'||x.termin)return x;x.termin=defaultTaskDeadline(x);x.termin_typ='výchozí interní';x.termin_od=taskDeadlineBase(x);x.termin_dni=x.priorita==='vysoká'?2:5;return x;}
+function draftSources(x){
+ const ids=[x.id,x.zdrojove_id,x.gmail_message_id,x.ai_zdroj&&x.ai_zdroj.source_id].filter(Boolean).map(String);
+ const contacts=(store.kontakty||[]).filter(k=>ids.includes(String(k.zdrojove_id||''))||[x.nazev,x.dalsi_krok,x.cekam_na,x.slib_komu].some(v=>v&&k.jmeno&&String(v).toLowerCase().includes(String(k.jmeno).toLowerCase())));
+ const notes=(store.zapisy||[]).filter(z=>ids.includes(String(z.zdrojove_id||''))||(x.projekt&&z.nazev&&String(z.nazev).toLowerCase().includes(String(x.projekt).toLowerCase())));
+ return {ids:Array.from(new Set(ids)),contacts,notes};
+}
 function renderDraftComposer(){
  const x=(store.ukoly||[]).find(t=>t.id===marvinUI.draftTask);if(!x)return '';
- const subject=String(x.projekt||x.nazev||'').replace(/[\r\n]/g,' ');
- const text='Dobrý den,\n\nrád bych navázal na téma „'+(x.nazev||'')+'“. Můžete mi prosím sdělit aktuální stav a co je potřeba pro další postup?\n\nDěkuji a přeji hezký den,\nAdam';
- return '<section class="card marvin-sheet" role="region" aria-label="Nový koncept"><h3>Draft e-mailu z úkolu</h3><p class="muted">Základní návrh bez AI služby. Uprav otázku podle skutečného záměru; příjemce vždy vyber ty. Pro propracovanou AI odpověď lze předat tento úkol do chatu.</p><label for="draftTo">Komu</label><input id="draftTo" type="email" autocomplete="email"><label for="draftFrom">Odesílat z</label><select id="draftFrom"><option>pruskaadam@me.com</option><option>adam.pruska@cometx.ch</option><option>assistantpruska@gmail.com</option></select><label for="draftSubject">Předmět</label><input id="draftSubject" value="'+esc(subject)+'"><label for="draftBody">Text ke kontrole</label><textarea id="draftBody" style="min-height:220px">'+esc(text)+'</textarea><p class="integration-note">Uloží se do soukromého panelu → Ke schválení. Přímé iCloud Drafts zatím není připojené. Nic se neodešle.</p><div class="row"><button class="btn pri" data-marvin-save-draft>Uložit koncept do panelu</button><button class="btn" data-marvin-ai-draft="'+esc(x.id)+'">Kopírovat zadání pro AI v chatu</button><button class="btn" data-marvin-close>Zrušit</button></div></section>';
+ const subject=String(x.projekt||x.nazev||'').replace(/[\r\n]/g,' '),src=draftSources(x),contact=src.contacts.find(k=>k.email)||src.contacts[0];
+ const evidence=[x.kontext_adama&&'Adamovo upřesnění',x.dalsi_krok&&'další krok úkolu',x.poznamka&&'poznámka úkolu',src.contacts.length&&src.contacts.length+' související kontakt(y)',src.notes.length&&src.notes.length+' související zápis(y)',src.ids.length&&src.ids.length+' zdrojové ID'].filter(Boolean);
+ return '<section class="card marvin-sheet" role="region" aria-label="Nový koncept"><h3>Draft e-mailu z úkolu</h3><p class="muted">Panel už nevkládá obecnou šablonu. Konkrétní návrh má vzniknout až po načtení skutečného e-mailového vlákna a těchto doložených podkladů: '+esc(evidence.join(', ')||'zatím žádné propojené podklady')+'.</p><label for="draftTo">Komu</label><input id="draftTo" type="email" autocomplete="email" value="'+esc(contact?.email||'')+'"><label for="draftFrom">Odesílat z</label><select id="draftFrom"><option>pruskaadam@me.com</option><option>adam.pruska@cometx.ch</option><option>assistantpruska@gmail.com</option></select><label for="draftSubject">Předmět</label><input id="draftSubject" value="'+esc(subject)+'"><label for="draftNotes">Poznámky a fakta pro e-mail</label><textarea id="draftNotes" style="min-height:120px" placeholder="Co má e-mail sdělit, na co navazuje, co chcete a co naopak nesmí slíbit…"></textarea><label for="draftBody">Hrubý text e-mailu</label><textarea id="draftBody" style="min-height:220px" placeholder="Napište text vlastními slovy. Lze jej uložit ručně nebo předat agentovi k optimalizaci."></textarea><p class="integration-note">Tento statický panel sám Gmail nečte. Tlačítko níže předá do chatu přesné ID úkolu a zdrojů; M.A.R.V.I.N. pak musí načíst povolenou konverzaci, porovnat ji s úkolem a uložit konkrétní koncept do Ke schválení. Nic se neodešle.</p><details><summary>Zdrojové vazby</summary><div class="task-note">'+esc(src.ids.join('\n')||'Bez zdrojového ID')+'</div></details><div class="row"><button class="btn pri" data-marvin-optimize="'+esc(x.id)+'">Optimalizovat text</button><button class="btn" data-marvin-ai-draft="'+esc(x.id)+'">Vygenerovat z reálných podkladů v chatu</button><button class="btn" data-marvin-save-draft>Uložit ručně napsaný koncept</button><button class="btn" data-marvin-close>Zrušit</button></div><p class="muted">Optimalizace se zařadí do fronty agenta. Výsledek se po zpracování objeví v Ke schválení; nic se automaticky neodešle.</p></section>';
 }
 function renderCalendarRequest(){
  const e=(store.plandata?.udalosti||[]).find(x=>eventKey(x)===marvinUI.calendarKey);if(!e)return '';
@@ -926,12 +940,23 @@ $('#main').addEventListener('click',async e=>{
  if(b.dataset.marvinCalendar){marvinUI.calendarKey=b.dataset.marvinCalendar;render();window.scrollTo(0,0);return;}
  if(b.hasAttribute('data-marvin-close')){marvinUI.draftTask=null;marvinUI.calendarKey=null;render();return;}
  if(b.dataset.marvinEml){const c=(store.koncepty||[]).find(x=>x.id===b.dataset.marvinEml);if(c)downloadDraft({...c,text:b.closest('[data-cid]')?.querySelector('[data-ctext]')?.value||c.text});return;}
- if(b.dataset.marvinAiDraft){const text='M.A.R.V.I.N., připrav koncept odpovědi pro úkol '+b.dataset.marvinAiDraft+'. Načti jeho aktuální kontext a povolené podklady v asistent-data/main. Nevymýšlej příjemce, částky ani závazky. Ulož pouze do koncepty.json se stavem navrh, nic neposílej.';try{await navigator.clipboard.writeText(text);toast('Zadání zkopírováno; vlož ho do chatu.');}catch{toast('Kopírování není dostupné. Požádej chat o koncept podle ID úkolu.');}return;}
+ if(b.dataset.marvinOptimize){
+  const id=b.dataset.marvinOptimize,notes=$('#draftNotes').value.trim(),rough=$('#draftBody').value.trim(),to=$('#draftTo').value.trim(),from=$('#draftFrom').value,subject=$('#draftSubject').value.trim();
+  if(!notes&&!rough){toast('Napiš poznámky nebo hrubý text, který má agent upravit.');return;}
+  if(to&&!$('#draftTo').checkValidity()){toast('E-mail příjemce nemá platný formát.');return;}
+  b.disabled=true;try{await loadFile('anotace');const task=(store.ukoly||[]).find(t=>t.id===id),requestId='draft-optimize:'+id,now=new Date().toISOString();let entry=store.anotace.find(a=>a.id===requestId);
+  const payload={komu:to,odeslat_z:from,predmet:subject,poznamky:notes,hruby_text:rough,ukol_id:id,stav:'ceka_na_agenta'};
+  const context='Optimalizuj návrh e-mailu do srozumitelného a uceleného textu. Zachovej všechna fakta, význam a požadovaný tón. Nedoplňuj nové adresáty, částky, termíny, sliby ani závazky. Poznámky:\n'+notes+'\n\nHrubý text:\n'+rough;
+  if(entry){entry.kontext=context;entry.upraveno=now;entry.draft_emailu=payload;entry.autor='Adam';entry.zdroj_zapisu='panel';}
+  else store.anotace.push({id:requestId,typ:'pozadavek-draft-emailu',nazev:'Optimalizace e-mailu · '+(task?.nazev||id),oblast:task?.oblast||'Osobní',kontext,autor:'Adam',vytvoreno:today(),upraveno:now,zdroj_zapisu:'panel',source_key:requestId,zdrojove_id:id,draft_emailu:payload});
+  if(await saveFile('anotace','Panel: požadavek na optimalizaci textu e-mailu')){marvinUI.draftTask=null;render();toast('Požadavek uložen · agent ho zpracuje v nejbližším běhu.');}}catch(err){toast('Požadavek se nepodařilo uložit: '+err.message);}finally{b.disabled=false;}return;
+ }
+ if(b.dataset.marvinAiDraft){const x=(store.ukoly||[]).find(t=>t.id===b.dataset.marvinAiDraft),src=x?draftSources(x):{ids:[]};const text='M.A.R.V.I.N., připrav konkrétní koncept e-mailu pro úkol '+b.dataset.marvinAiDraft+'. Nejdřív načti úkol a související povolené podklady v pruskaadam-hub/asistent-data/main. Zdrojové vazby: '+src.ids.join(', ')+'. Pokud je zdrojem e-mail, načti celé povolené vlákno a zachovej fakta, dosavadní tón, otázky, sliby a adresáty. Když skutečná konverzace není dostupná, koncept nevymýšlej a napiš, co chybí. Nevymýšlej příjemce, částky, termíny ani závazky. Ulož pouze do koncepty.json se stavem navrh, nic neposílej.';try{await navigator.clipboard.writeText(text);toast('Zadání zkopírováno; vlož ho do chatu.');}catch{toast('Kopírování není dostupné. Požádej chat o koncept podle ID úkolu.');}return;}
  if(b.hasAttribute('data-marvin-save-draft')){
   const id=marvinUI.draftTask,to=$('#draftTo').value.trim(),from=$('#draftFrom').value,subject=$('#draftSubject').value.trim(),text=$('#draftBody').value.trim();
   if(!to||!$('#draftTo').checkValidity()||!subject||!text){toast('Vyplň platného příjemce, předmět a text.');return;}
   b.disabled=true;try{await loadFile('koncepty');const key='task:'+id+':draft',existing=store.koncepty.find(x=>x.zdrojove_id===id&&x.stav==='navrh');if(existing){marvinUI.draftTask=null;tab='schvaleni';render();toast('Otevřen stávající návrh, nevytvářím duplikát.');return;}
-  const x=(store.ukoly||[]).find(x=>x.id===id);store.koncepty.push({id:existing?.id||key+':'+uid(),vytvoreno:today(),zdroj_zapisu:'panel',autor:'Adam',zdrojove_id:id,komu:to,odeslat_z:from,predmet:subject,text,kontext:'Návrh z úkolu: '+(x?.nazev||id),oblast:x?.oblast||'Osobní',stav:'navrh',generator:'šablona upravená uživatelem',ulozeni_schranka:from==='pruskaadam@me.com'?'nepripojeno':'pouze_panel'});
+  const x=(store.ukoly||[]).find(x=>x.id===id);store.koncepty.push({id:existing?.id||key+':'+uid(),vytvoreno:today(),zdroj_zapisu:'panel',autor:'Adam',zdrojove_id:id,komu:to,odeslat_z:from,predmet:subject,text,kontext:'Návrh z úkolu: '+(x?.nazev||id),oblast:x?.oblast||'Osobní',stav:'navrh',generator:'ručně napsaný návrh',ulozeni_schranka:from==='pruskaadam@me.com'?'nepripojeno':'pouze_panel'});
   if(await saveFile('koncepty','Panel: M.A.R.V.I.N. koncept z úkolu')){marvinUI.draftTask=null;tab='schvaleni';render();toast('Koncept uložený v panelu.');}}catch(err){toast('Koncept se nepodařilo uložit: '+err.message);}finally{b.disabled=false;}return;
  }
  if(b.hasAttribute('data-marvin-save-calendar')){
