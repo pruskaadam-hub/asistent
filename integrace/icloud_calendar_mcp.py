@@ -10,7 +10,8 @@
 Credentials are resolved by icloud-mcp from macOS Keychain or the explicit
 ICLOUD_APP_PASSWORD fallback. This wrapper
 intentionally exposes no mail or contacts tools. Calendar writes remain gated
-by ICLOUD_ENABLE_WRITES=1 and an interactive confirmation for every action.
+by ICLOUD_ENABLE_WRITES=1 and an explicit confirm=true argument supplied only
+after the user confirms the concrete action in chat.
 """
 
 from __future__ import annotations
