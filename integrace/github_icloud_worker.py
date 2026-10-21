@@ -26,6 +26,11 @@ from urllib.parse import quote, unquote, urlparse
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
+# GitHub-hosted runners do not have an OS credential store. Force keyring's
+# null backend so icloud-mcp proceeds to the ICLOUD_APP_PASSWORD environment
+# fallback instead of raising NoKeyringError before checking it.
+os.environ.setdefault("PYTHON_KEYRING_BACKEND", "keyring.backends.null.Keyring")
+
 import icalendar
 from icloud_mcp.clients import CalendarClient
 from icloud_mcp.config import Settings
