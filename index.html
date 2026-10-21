@@ -66,7 +66,7 @@ pre.draft{white-space:pre-wrap;font:inherit;margin:6px 0;background:var(--surfac
 
 /* Přehled oblastí */
 :root{--radius:14px;--bg:#f3f5f8;--border:#e0e5ed;--muted:#606c80;--text:#202b3d;--shadow:0 4px 18px rgba(27,43,69,.04)}
-.bar,nav,main{width:100%;max-width:var(--content-max);margin-left:auto;margin-right:auto}main{padding:26px 24px}.bar{padding:16px 24px}.bar h1{font-size:21px;letter-spacing:-.6px}
+.bar,nav{width:calc(100% - 32px);max-width:var(--content-max);margin-left:auto;margin-right:auto}main{width:calc(100% - 32px);max-width:var(--content-max);margin:22px auto 40px;padding:26px 24px;background:var(--surface);border:1px solid var(--border);border-radius:22px;box-shadow:0 12px 36px rgba(27,43,69,.07)}.bar{padding:16px 24px}.bar h1{font-size:21px;letter-spacing:-.6px}
 h2{font-size:25px;letter-spacing:-.6px}h3{font-size:17px}.card{padding:17px 18px}.title{line-height:1.55}.btn{min-height:36px}.btn:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
 .area-loc{--area:#7645bd;--area-soft:#f1eafb}
 .area-cometx{--area:#22764f;--area-soft:#e8f4ed}
@@ -105,11 +105,11 @@ h2{font-size:25px;letter-spacing:-.6px}h3{font-size:17px}.card{padding:17px 18px
 /* M.A.R.V.I.N. — pevná mobilní šířka */
 html{width:100%;overflow-x:clip;-webkit-text-size-adjust:100%;touch-action:pan-x pan-y}
 body{width:100%;max-width:100%;overflow-x:clip;touch-action:pan-x pan-y}
-main,header,.bar,nav,.card,.row,.form,.calendar-layout,.calendar-agenda{min-width:0;max-width:100%}
+.card,.row,.form,.calendar-layout,.calendar-agenda{min-width:0;max-width:100%}
 .row>*{min-width:0;max-width:100%}.title,.tag,.task-note,.md,.muted,pre{overflow-wrap:anywhere;word-break:normal}
 img,video,svg{max-width:100%;height:auto}pre{white-space:pre-wrap}.form{grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))}
 .marvin-sheet{border:2px solid var(--accent);margin-bottom:20px}.integration-note{background:var(--surface-2);padding:12px;border-radius:10px}
-@media(max-width:600px){input,select,textarea,select.inline{font-size:16px!important}.bar{flex-wrap:wrap;gap:8px}.bar h1{flex:1}.sync{order:3;flex-basis:100%;margin:0}.toolbar>*{min-width:0}.btn{white-space:normal;overflow-wrap:anywhere}main{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.calendar-toolbar h3{flex-basis:50%}.calendar-toolbar select{max-width:100%}.toast{max-width:calc(100% - 24px)}}
+@media(max-width:600px){input,select,textarea,select.inline{font-size:16px!important}.bar{width:100%;flex-wrap:wrap;gap:8px}.bar h1{flex:1}.sync{order:3;flex-basis:100%;margin:0}.toolbar>*{min-width:0}.btn{white-space:normal;overflow-wrap:anywhere}main{width:100%;margin:0 auto;padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));border:0;border-radius:0;box-shadow:none}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.calendar-toolbar h3{flex-basis:50%}.calendar-toolbar select{max-width:100%}.toast{max-width:calc(100% - 24px)}}
 </style>
 </head>
 <body>
