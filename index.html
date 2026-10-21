@@ -128,7 +128,8 @@ function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
 const FILES = {
   zdroje: 'zdroje.json', pravidla: 'pravidla.json', ukoly: 'ukoly.json', kontakty: 'kontakty.json',
   faktury: 'faktury.json', koncepty: 'koncepty.json', zapisy: 'zapisy.json', zpetna: 'zpetna-vazba.json',
-  report: 'reporty/dnes.md', plandata: 'planovani.json', vecer: 'reporty/vecer.md', tyden: 'reporty/tyden.md', anotace: 'anotace.json', zpracovani: 'zpracovani.json'
+  report: 'reporty/dnes.md', plandata: 'planovani.json', vecer: 'reporty/vecer.md', tyden: 'reporty/tyden.md', anotace: 'anotace.json', zpracovani: 'zpracovani.json',
+  calendarRequests: 'kalendar-pozadavky.json'
 };
 const store = {}, shas = {};
 
@@ -707,6 +708,21 @@ $('#main').addEventListener('click',async e=>{
 
 /* ---------- Interaktivní kalendář ---------- */
 const calUI={date:today(),month:today().slice(0,7),area:''};
+const icloudUI={show:false,date:today()};
+function writableIcloudCalendars(){
+ const source=(store.zdroje||[]).find(x=>x.id==='icloud-cal'&&x.stav==='Aktivní');
+ if(!source)return [];
+ const ids=new Set(source.write_calendar_ids||[]);
+ return (source.kalendare||[]).filter(x=>ids.has(x.calendar_id));
+}
+function renderIcloudRequests(){
+ const writable=writableIcloudCalendars(),all=[...(store.calendarRequests||[])].sort((a,b)=>String(b.vytvoreno||'').localeCompare(String(a.vytvoreno||''))),recent=all.slice(0,5);
+ const state={ceka:['Čeká na zpracování','warn'],zpracovano:['Zapsáno do iCloudu','good'],chyba:['Chyba zápisu','bad']};
+ const history=recent.length?'<details class="card"><summary><b>Poslední iCloud požadavky</b></summary>'+recent.map(x=>{const s=state[x.stav]||[x.stav||'Neznámý stav','warn'];return '<div style="border-top:1px solid var(--border);padding:10px 0"><b>'+esc(x.title||'Událost')+'</b> '+tag(s[0],s[1])+'<div class="muted">'+esc(fmtDate(String(x.start||'').slice(0,10)))+' · '+esc(x.calendar_name||x.calendar_id||'')+'</div>'+(x.chyba?'<p class="task-note">'+esc(x.chyba)+'</p>':'')+(x.stav==='chyba'?'<button class="btn sm" data-icloud-retry="'+esc(x.id)+'">Zkusit znovu</button>':'')+'</div>';}).join('')+'</details>':'';
+ if(!icloudUI.show)return history;
+ if(!writable.length)return '<div class="card"><b>iCloud zápis není povolený</b><p class="muted">V aktivním zdroji icloud-cal nejsou žádné kalendáře povolené pro zápis.</p><button class="btn" data-icloud-close>Zavřít</button></div>'+history;
+ return '<section class="card marvin-sheet" aria-label="Nová iCloud událost"><h3>Nová událost v iCloudu</h3><p class="muted">Kliknutí na Vytvořit je výslovné potvrzení zápisu. Událost nebude mít žádné účastníky.</p><label for="icloudCalendar">Kalendář</label><select id="icloudCalendar">'+writable.map(x=>'<option value="'+esc(x.calendar_id)+'">'+esc(x.nazev||x.calendar_id)+'</option>').join('')+'</select><label for="icloudTitle">Název</label><input id="icloudTitle" autocomplete="off"><div class="form cols"><label>Datum<input id="icloudDate" type="date" value="'+esc(icloudUI.date)+'"></label><label>Začátek<input id="icloudStart" type="time" value="09:00"></label><label>Konec<input id="icloudEnd" type="time" value="09:30"></label></div><label for="icloudLocation">Místo (volitelné)</label><input id="icloudLocation" autocomplete="off"><div class="row"><button class="btn pri" data-icloud-save>Vytvořit v iCloudu</button><button class="btn" data-icloud-close>Zrušit</button></div><p class="integration-note">Požadavek zpracuje zabezpečený GitHub Actions worker. Stav se po obnovení zobrazí zde.</p></section>'+history;
+}
 function pragueDate(value) {
  if(!value)return '';if(/^\d{4}-\d{2}-\d{2}$/.test(value))return value;
  const d=new Date(value);return Number.isNaN(d.getTime())?'':new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Prague'}).format(d);
@@ -734,13 +750,13 @@ function renderCalendar() {
  const issue=calendarIssue(calUI.date);
  const icloudUpdated=store.plandata?.icloud_aktualizovano,icloudCount=(store.plandata?.udalosti||[]).filter(x=>x.source==='icloud-cal').length,icloudState=store.plandata?.icloud_stav;
  const icloudInfo=icloudUpdated?'<p class="integration-note"><b>iCloud:</b> '+esc(icloudState||'načteno')+' · '+icloudCount+' událostí · aktualizováno '+esc(new Date(icloudUpdated).toLocaleString('cs-CZ',{timeZone:'Europe/Prague'}))+'</p>':'<p class="integration-note"><b>iCloud:</b> zatím není synchronizovaný do panelu.</p>';
- return '<h2>Kalendář</h2><p class="overview-intro">Schůzky, termíny a plánované úkoly. Klikni na den pro podrobnosti, na úkol pro úpravu.</p>'+icloudInfo
+ return '<h2>Kalendář</h2><p class="overview-intro">Schůzky, termíny a plánované úkoly. Klikni na den pro podrobnosti, na úkol pro úpravu.</p>'+icloudInfo+renderIcloudRequests()
  +'<div class="calendar-toolbar"><button class="btn" data-cal-month="-1" aria-label="Předchozí měsíc">←</button><h3>'+first.toLocaleDateString('cs-CZ',{timeZone:'UTC',month:'long',year:'numeric'})+'</h3><button class="btn" data-cal-month="1" aria-label="Další měsíc">→</button><button class="btn" data-cal-today>Dnes</button><select id="calArea" style="width:auto" aria-label="Oblast"><option value="">Všechny oblasti</option>'+AREAS.map(a=>'<option value="'+esc(a.key)+'" '+(calUI.area===a.key?'selected':'')+'>'+esc(a.label)+'</option>').join('')+'</select></div>'
  +'<div class="calendar-legend">'+AREAS.map(a=>'<span class="'+a.cls+'"><span class="area-dot" aria-hidden="true"></span>'+esc(a.label)+'</span>').join('')+'</div>'
  +'<div class="calendar-layout"><div><div class="calendar-grid">'+['Po','Út','St','Čt','Pá','So','Ne'].map(x=>'<div class="calendar-weekday">'+x+'</div>').join('')+cells+'</div><p class="muted">Kalendáře načtené '+esc(store.plandata?.od||'—')+' až '+esc(store.plandata?.do||'—')+'. Mimo tento rozsah se zobrazují jen uložené úkoly. Na mobilu barevné značky otevři výběrem dne.</p></div>'
  +'<aside class="calendar-agenda"><h3>'+fmtDate(calUI.date)+'</h3>'+(issue?'<p class="muted">'+esc(issue)+'</p>':'')
  +'<button class="btn pri" data-cal-plan="'+calUI.date+'">Naplánovat tento den →</button>'
- +'<div class="calendar-task-actions"><button class="btn" data-cal-new="'+calUI.date+'">+ Úkol</button><button class="btn" data-ann-new="'+calUI.date+'">+ Vlastní událost / LOC</button></div>'+renderAnnotationEditor()
+ +'<div class="calendar-task-actions"><button class="btn" data-cal-new="'+calUI.date+'">+ Úkol</button><button class="btn" data-ann-new="'+calUI.date+'">+ Vlastní událost / LOC</button><button class="btn pri" data-icloud-new="'+calUI.date+'">+ iCloud událost</button></div>'+renderAnnotationEditor()
  +(selected.length?selected.map(x=>'<div class="card area-card '+areaInfo(x.oblast).cls+'"><div class="agenda-time">'+esc(x.label)+'</div><b>'+esc(x.title)+'</b>'
  +(x.kind==='contact'?'<div class="calendar-task-actions"><button class="btn sm" data-go-contact="'+esc(x.id)+'">Otevřít kontakt</button></div>':x.kind==='task'?'<div class="calendar-task-actions"><button class="btn sm" data-go-task="'+esc(x.id)+'">Otevřít úkol</button><button class="btn sm good" data-plan-done="'+esc(x.id)+'">Hotovo</button></div>'+taskNoteEditor(x.task):x.kind==='event'?'<p class="task-note">'+esc((store.plandata?.pripravy||[]).find(p=>p.event_id===x.id)?.body||x.event.description||'Bez dalších podkladů.')+'</p>':'')+annotationControls(x)+'</div>').join(''):'<div class="empty" style="margin-top:10px">Pro tento den nejsou uložené položky.</div>')
  +'</aside></div><h3>Úkoly bez termínu a bez plánovaného dne</h3><p class="muted">Vyber den v kalendáři a přiřaď mu úkol. Skutečný termín zůstane prázdný.</p>'
@@ -755,6 +771,17 @@ $('#main').addEventListener('click',async e=>{
  if(b.dataset.calPlan){planUI.date=b.dataset.calPlan;tab='plan';render();return;}
  if(b.dataset.calNew){tab='ukoly';ui.filters.ukoly={oblast:calUI.area};ui.editing=null;ui.adding=true;render();const el=document.querySelector('[data-f="plan_datum"]');if(el)el.value=b.dataset.calNew;return;}
  if(b.dataset.calAssign){const x=(store.ukoly||[]).find(x=>x.id===b.dataset.calAssign);if(!x)return;x.plan_datum=calUI.date;x.upraveno=today();if(await saveFile('ukoly','Panel: naplánování úkolu v kalendáři'))render();}
+ if(b.dataset.icloudNew){icloudUI.show=true;icloudUI.date=b.dataset.icloudNew;render();return;}
+ if(b.hasAttribute('data-icloud-close')){icloudUI.show=false;render();return;}
+ if(b.hasAttribute('data-icloud-save')){
+  const calendarId=$('#icloudCalendar').value,title=$('#icloudTitle').value.trim(),date=$('#icloudDate').value,startTime=$('#icloudStart').value,endTime=$('#icloudEnd').value,location=$('#icloudLocation').value.trim(),calendar=writableIcloudCalendars().find(x=>x.calendar_id===calendarId);
+  const start=localInstant(date,startTime),end=localInstant(date,endTime);
+  if(!calendar||!title||!date||!startTime||!endTime||!Number.isFinite(start)||!Number.isFinite(end)||end<=start){toast('Vyplň název a platný začátek i konec.');return;}
+  b.disabled=true;try{await loadFile('calendarRequests');const now=new Date().toISOString(),requestId='icloud-create:'+(crypto.randomUUID?crypto.randomUUID():uid());store.calendarRequests=store.calendarRequests||[];store.calendarRequests.push({id:requestId,typ:'vytvorit-udalost',calendar_id:calendarId,calendar_name:calendar.nazev||calendarId,title,start:new Date(start).toISOString(),end:new Date(end).toISOString(),location,stav:'ceka',potvrzeno:true,potvrzeno_v:now,autor:'Adam',zdroj_zapisu:'panel',vytvoreno:today(),upraveno:now,pokusy:0});if(await saveFile('calendarRequests','Panel: potvrzený požadavek na iCloud událost')){icloudUI.show=false;render();toast('Požadavek uložen · iCloud zápis se zpracovává');}}catch(err){toast('Požadavek se nepodařilo uložit: '+err.message);}finally{b.disabled=false;}return;
+ }
+ if(b.dataset.icloudRetry){
+  b.disabled=true;try{await loadFile('calendarRequests');const x=(store.calendarRequests||[]).find(x=>x.id===b.dataset.icloudRetry);if(!x)return;x.stav='ceka';x.chyba='';x.souhrn='';x.zpracovano='';x.upraveno=new Date().toISOString();x.potvrzeno=true;if(await saveFile('calendarRequests','Panel: opakování iCloud kalendářového požadavku')){render();toast('Požadavek čeká na nový pokus');}}catch(err){toast('Opakování se nepodařilo uložit: '+err.message);}finally{b.disabled=false;}return;
+ }
 });
 
 
