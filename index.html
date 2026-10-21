@@ -10,7 +10,7 @@
 <style>
 :root{
   --bg:#f6f5f2;--surface:#fff;--surface-2:#efede8;--text:#1d1c1a;--muted:#6b6862;--border:#dedad2;
-  --accent:#2f5bd3;--accent-soft:#e6ecfb;--good:#2e7d4f;--good-soft:#e3f2e8;--warn:#a86a00;--warn-soft:#fbf0dc;--bad:#b3382c;--bad-soft:#f8e3e0;
+  --accent:#2f5bd3;--accent-soft:#e6ecfb;--good:#2e7d4f;--good-soft:#e3f2e8;--warn:#a86a00;--warn-soft:#fbf0dc;--bad:#b3382c;--bad-soft:#f8e3e0;--content-max:1120px;
   --radius:10px;--shadow:0 1px 2px rgba(0,0,0,.05);
 }
 @media (prefers-color-scheme:dark){:root{
@@ -66,7 +66,7 @@ pre.draft{white-space:pre-wrap;font:inherit;margin:6px 0;background:var(--surfac
 
 /* Přehled oblastí */
 :root{--radius:14px;--bg:#f3f5f8;--border:#e0e5ed;--muted:#606c80;--text:#202b3d;--shadow:0 4px 18px rgba(27,43,69,.04)}
-.bar,nav,main{max-width:1180px}main{padding:26px 24px}.bar{padding:16px 24px}.bar h1{font-size:21px;letter-spacing:-.6px}
+.bar,nav,main{width:100%;max-width:var(--content-max);margin-left:auto;margin-right:auto}main{padding:26px 24px}.bar{padding:16px 24px}.bar h1{font-size:21px;letter-spacing:-.6px}
 h2{font-size:25px;letter-spacing:-.6px}h3{font-size:17px}.card{padding:17px 18px}.title{line-height:1.55}.btn{min-height:36px}.btn:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
 .area-loc{--area:#7645bd;--area-soft:#f1eafb}
 .area-cometx{--area:#22764f;--area-soft:#e8f4ed}
