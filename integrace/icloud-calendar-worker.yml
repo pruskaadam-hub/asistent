@@ -1,0 +1,41 @@
+name: M.A.R.V.I.N. iCloud calendar
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - kalendar-pozadavky.json
+
+permissions:
+  contents: write
+
+concurrency:
+  group: marvin-icloud-calendar
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout private data repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install calendar dependencies
+        run: python -m pip install --disable-pip-version-check icloud-mcp==0.1.1 "icalendar>=6,<7"
+
+      - name: Process confirmed iCloud requests
+        env:
+          MARVIN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ICLOUD_USERNAME: ${{ secrets.ICLOUD_USERNAME }}
+          ICLOUD_APP_PASSWORD: ${{ secrets.ICLOUD_APP_PASSWORD }}
+          ICLOUD_TZ: Europe/Prague
+          ICLOUD_ENABLE_WRITES: "1"
+        run: python integrace/github_icloud_worker.py
