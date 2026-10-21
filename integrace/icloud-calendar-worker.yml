@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - kalendar-pozadavky.json
+      - .github/workflows/icloud-calendar.yml
+      - integrace/github_icloud_worker.py
 
 permissions:
   contents: write
@@ -16,17 +18,16 @@ concurrency:
 
 jobs:
   process:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout private data repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-          cache: pip
 
       - name: Install calendar dependencies
         run: python -m pip install --disable-pip-version-check icloud-mcp==0.1.1 "icalendar>=6,<7"
